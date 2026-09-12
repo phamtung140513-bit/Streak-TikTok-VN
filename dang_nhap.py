@@ -20,6 +20,31 @@ print(f"     ĐANG MỞ TRÌNH DUYỆT ĐĂNG NHẬP [{acc_title}]")
 print("=" * 60)
 print(f"Thư mục lưu phiên: {profile_dir}\n")
 
+def cleanup_profile(target_dir):
+    try:
+        import psutil
+        p_str = str(target_dir).lower()
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = proc.info.get('cmdline') or []
+                cmd_str = " ".join(cmdline).lower()
+                if p_str in cmd_str and ('chrome' in proc.info.get('name', '').lower() or 'chromium' in proc.info.get('name', '').lower()):
+                    proc.kill()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    for fname in ["SingletonLock", "SingletonSocket", "SingletonCookie", "LOCK"]:
+        try:
+            (target_dir / fname).unlink(missing_ok=True)
+            (target_dir / "Default" / fname).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+# Tự động dọn dẹp tiến trình cũ đang chiếm giữ thư mục nếu có
+cleanup_profile(profile_dir)
+
 try:
     with sync_playwright() as p:
         print("[1] Đang khởi động trình duyệt Chromium...")
@@ -28,9 +53,10 @@ try:
             headless=False,
             args=[
                 "--disable-blink-features=AutomationControlled",
-                "--start-maximized"
+                "--window-size=1200,850",
+                "--window-position=120,60"
             ],
-            no_viewport=True,
+            viewport={"width": 1200, "height": 850},
             locale="vi-VN"
         )
         page = context.pages[0] if context.pages else context.new_page()
@@ -43,8 +69,9 @@ try:
             pass
         
         print("\n" + "=" * 60)
-        print(f">>> TRÌNH DUYỆT [{acc_title}] ĐÃ HIỆN LÊN TRÊN MÀN HÌNH!")
+        print(f">>> TRÌNH DUYỆT [{acc_title}] ĐÃ MỞ TRÊN MÀN HÌNH!")
         print(">>> Vui lòng quét mã QR trên điện thoại hoặc đăng nhập tài khoản.")
+        print(">>> (Nếu bị che, hãy nhìn xuống Taskbar hoặc bấm Alt + Tab)")
         print("=" * 60 + "\n")
         
         input(f">>> Sau khi đã đăng nhập xong [{acc_title}], hãy nhấn ENTER tại đây: ")
