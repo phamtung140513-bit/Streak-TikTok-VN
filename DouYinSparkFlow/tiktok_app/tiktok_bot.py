@@ -453,10 +453,17 @@ async def start_qr_login(acc_id="acc_1"):
             chan = get_browser_channel()
             launch_args = {
                 "user_data_dir": str(p_dir),
-                "headless": True,
-                "viewport": {"width": 1280, "height": 800},
+                "headless": False,
+                "viewport": {"width": 1000, "height": 800},
                 "user_agent": REAL_USER_AGENT,
-                "args": ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+                "args": [
+                    "--disable-blink-features=AutomationControlled",
+                    "--window-position=-3000,-3000",
+                    "--window-size=1000,800",
+                    "--no-sandbox",
+                    "--no-first-run",
+                    "--no-default-browser-check"
+                ],
                 "locale": "vi-VN"
             }
             if chan:
