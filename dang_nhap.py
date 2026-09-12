@@ -1,15 +1,16 @@
 import os
 import sys
 import time
-import threading
+import subprocess
+import sqlite3
+import shutil
+import tempfile
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-from playwright.sync_api import sync_playwright
 
 acc_id = sys.argv[1] if len(sys.argv) > 1 else "acc_1"
 repo_root = Path(__file__).resolve().parent
@@ -23,131 +24,102 @@ else:
 
 profile_dir.mkdir(parents=True, exist_ok=True)
 
-print("=" * 60)
-print(f"     ĐANG MỞ TRÌNH DUYỆT ĐĂNG NHẬP [{acc_title}]")
-print("=" * 60)
-print(f"Thư mục lưu phiên: {profile_dir}\n")
-
-def cleanup_profile(target_dir):
-    """Đóng sạch các tiến trình cũ đang khóa thư mục."""
+# Dọn dẹp lock files
+for fname in ["SingletonLock", "SingletonSocket", "SingletonCookie", "LOCK", "lockfile"]:
     try:
-        import psutil
-        p_str = str(target_dir).lower()
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                cmdline = proc.info.get('cmdline') or []
-                cmd_str = " ".join(cmdline).lower()
-                p_name = proc.info.get('name', '').lower()
-                if p_str in cmd_str and ('chrome' in p_name or 'edge' in p_name or 'chromium' in p_name):
-                    proc.kill()
-            except Exception:
-                pass
+        (profile_dir / fname).unlink(missing_ok=True)
+        (profile_dir / "Default" / fname).unlink(missing_ok=True)
     except Exception:
         pass
 
-    for fname in ["SingletonLock", "SingletonSocket", "SingletonCookie", "LOCK"]:
-        try:
-            (target_dir / fname).unlink(missing_ok=True)
-            (target_dir / "Default" / fname).unlink(missing_ok=True)
-        except Exception:
-            pass
+# Tìm trình duyệt thực tế được cài đặt trên máy
+browser_candidates = [
+    (Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"), "Google Chrome"),
+    (Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"), "Microsoft Edge"),
+    (Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"), "Microsoft Edge"),
+    (Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"), "Google Chrome"),
+    (Path(r"C:\Users\Admin\AppData\Local\Google\Chrome\Application\chrome.exe"), "Google Chrome")
+]
 
-cleanup_profile(profile_dir)
+browser_exe = None
+browser_name = None
 
-# Ưu tiên dùng Microsoft Edge trên Windows để tránh bị antivirus/360 chặn cửa sổ
-edge_path = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
-browser_channel = "msedge" if edge_path.exists() else None
-browser_name = "Microsoft Edge" if browser_channel == "msedge" else "Chromium"
+for path, name in browser_candidates:
+    if path.exists():
+        browser_exe = str(path)
+        browser_name = name
+        break
 
+if not browser_exe:
+    browser_exe = "msedge.exe"
+    browser_name = "Trình duyệt Web"
+
+print("=" * 60)
+print(f"     ĐĂNG NHẬP TIKTOK [{acc_title}]")
+print("=" * 60)
+print(f"Trình duyệt sử dụng: {browser_name}")
+print(f"Thư mục lưu phiên: {profile_dir}\n")
+
+def check_session_in_cookies(p_dir):
+    c_path = p_dir / "Default" / "Network" / "Cookies"
+    if not c_path.exists():
+        return False
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+            t_name = tf.name
+        shutil.copyfile(c_path, t_name)
+        conn = sqlite3.connect(t_name)
+        c = conn.cursor()
+        c.execute("SELECT name FROM cookies WHERE name IN ('sessionid', 'sessionid_ss', 'sid_guard', 'uid_tt')")
+        rows = c.fetchall()
+        conn.close()
+        Path(t_name).unlink(missing_ok=True)
+        return len(rows) > 0
+    except Exception:
+        return False
+
+# Mở trình duyệt thực tế trực tiếp
+cmd = [
+    browser_exe,
+    f"--user-data-dir={profile_dir}",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "https://www.tiktok.com/login/qrcode"
+]
+
+print(f"[1] Đang mở {browser_name}...")
+proc = subprocess.Popen(cmd)
+
+print("\n" + "=" * 60)
+print(f"👉 CỬA SỔ [{browser_name}] ĐÃ HIỆN LÊN MÀN HÌNH!")
+print("👉 Hãy quét mã QR trên điện thoại (hoặc đăng nhập bằng Google/Email/SĐT).")
+print("👉 Hệ thống sẽ TỰ ĐỘNG PHÁT HIỆN ngay khi bạn đăng nhập thành công!")
+print("=" * 60 + "\n")
+
+logged_in = False
+for i in range(300):  # Đợi tối đa 5 phút
+    if proc.poll() is not None:
+        # Người dùng tự đóng trình duyệt, kiểm tra xem đã lưu cookie chưa
+        if check_session_in_cookies(profile_dir):
+            logged_in = True
+        break
+
+    if check_session_in_cookies(profile_dir):
+        logged_in = True
+        print(f"\n🎉 PHÁT HIỆN ĐĂNG NHẬP THÀNH CÔNG VÀO [{acc_title}]!")
+        time.sleep(2)
+        break
+
+    time.sleep(1)
+
+if logged_in:
+    print(f"\n✅ [THÀNH CÔNG] Đã lưu phiên đăng nhập [{acc_title}] vĩnh viễn!")
+    print("Bạn có thể đóng cửa sổ trình duyệt và bắt đầu dùng bot.")
+else:
+    print(f"\n⚠️ Chưa phát hiện phiên đăng nhập. Bạn có thể mở lại để thử lại.")
+
+print("\nNhấn phím Enter để hoàn tất...")
 try:
-    with sync_playwright() as p:
-        print(f"[1] Đang khởi động trình duyệt {browser_name}...")
-        
-        launch_kwargs = {
-            "user_data_dir": str(profile_dir),
-            "headless": False,
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                "--start-maximized",
-                "--no-first-run",
-                "--no-default-browser-check"
-            ],
-            "no_viewport": True,
-            "locale": "vi-VN"
-        }
-        if browser_channel:
-            launch_kwargs["channel"] = browser_channel
-
-        context = p.chromium.launch_persistent_context(**launch_kwargs)
-        page = context.pages[0] if context.pages else context.new_page()
-        
-        print(f"[2] Đang tải trang đăng nhập TikTok (https://www.tiktok.com/login/qrcode)...")
-        page.goto("https://www.tiktok.com/login/qrcode")
-        try:
-            page.bring_to_front()
-        except Exception:
-            pass
-        
-        print("\n" + "=" * 60)
-        print(f"👉 CỬA SỔ TRÌNH DUYỆT [{browser_name}] ĐÃ HIỆN LÊN MÀN HÌNH!")
-        print("👉 Vui lòng quét mã QR trên điện thoại để đăng nhập.")
-        print("👉 Hệ thống sẽ TỰ ĐỘNG NHẬN DIỆN khi bạn đăng nhập thành công!")
-        print("=" * 60 + "\n")
-
-        login_completed = threading.Event()
-
-        def wait_for_enter_fallback():
-            try:
-                input(">>> (Hoặc bạn có thể nhấn phím ENTER tại đây sau khi quét mã xong): ")
-                login_completed.set()
-            except Exception:
-                pass
-
-        enter_thread = threading.Thread(target=wait_for_enter_fallback, daemon=True)
-        enter_thread.start()
-
-        # Vòng lặp tự động phát hiện khi đăng nhập xong (qua cookie hoặc url)
-        while not login_completed.is_set():
-            try:
-                if not context.pages:
-                    print("Cửa sổ trình duyệt đã được đóng.")
-                    break
-
-                cookies = context.cookies()
-                has_session = any(c.get("name") in ["sessionid", "sessionid_ss", "sid_guard", "uid_tt"] for c in cookies)
-                if has_session:
-                    print(f"\n🎉 PHÁT HIỆN COOKIE ĐĂNG NHẬP THÀNH CÔNG VÀO TIKTOK [{acc_title}]!")
-                    login_completed.set()
-                    time.sleep(2)
-                    break
-
-                for current_page in list(context.pages):
-                    try:
-                        cur_url = current_page.url.lower()
-                        if "tiktok.com" in cur_url and "login" not in cur_url and "about:blank" not in cur_url:
-                            print(f"\n🎉 PHÁT HIỆN CHUYỂN HƯỚNG ĐĂNG NHẬP THÀNH CÔNG [{acc_title}]!")
-                            login_completed.set()
-                            time.sleep(2)
-                            break
-                    except Exception:
-                        pass
-            except Exception as e:
-                # Bỏ qua các lỗi tạm thời khi trang đang chuyển hướng
-                pass
-            time.sleep(1)
-
-        print("\n[3] Đang lưu cấu hình và đóng trình duyệt...")
-        try:
-            context.close()
-        except Exception:
-            pass
-        
-    print(f"\n✅ [THÀNH CÔNG RỰC RỠ] Đã lưu phiên đăng nhập [{acc_title}] thành công!")
-except Exception as e:
-    print(f"\n❌ [LỖI] Có lỗi xảy ra: {e}")
-
-try:
-    input("\nNhấn Enter để đóng cửa sổ...")
+    input()
 except Exception:
     pass
-
