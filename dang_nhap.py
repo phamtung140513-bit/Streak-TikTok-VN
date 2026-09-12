@@ -3,6 +3,12 @@ import sys
 import time
 import threading
 from pathlib import Path
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from playwright.sync_api import sync_playwright
 
 acc_id = sys.argv[1] if len(sys.argv) > 1 else "acc_1"
@@ -103,6 +109,10 @@ try:
         # Vòng lặp tự động phát hiện khi đăng nhập xong (qua cookie hoặc url)
         while not login_completed.is_set():
             try:
+                if not context.pages:
+                    print("Cửa sổ trình duyệt đã được đóng.")
+                    break
+
                 cookies = context.cookies()
                 has_session = any(c.get("name") in ["sessionid", "sessionid_ss", "sid_guard", "uid_tt"] for c in cookies)
                 if has_session:
@@ -111,23 +121,33 @@ try:
                     time.sleep(2)
                     break
 
-                if context.pages:
-                    for current_page in context.pages:
+                for current_page in list(context.pages):
+                    try:
                         cur_url = current_page.url.lower()
                         if "tiktok.com" in cur_url and "login" not in cur_url and "about:blank" not in cur_url:
                             print(f"\n🎉 PHÁT HIỆN CHUYỂN HƯỚNG ĐĂNG NHẬP THÀNH CÔNG [{acc_title}]!")
                             login_completed.set()
                             time.sleep(2)
                             break
-            except Exception:
-                break
+                    except Exception:
+                        pass
+            except Exception as e:
+                # Bỏ qua các lỗi tạm thời khi trang đang chuyển hướng
+                pass
             time.sleep(1)
 
         print("\n[3] Đang lưu cấu hình và đóng trình duyệt...")
-        context.close()
+        try:
+            context.close()
+        except Exception:
+            pass
         
     print(f"\n✅ [THÀNH CÔNG RỰC RỠ] Đã lưu phiên đăng nhập [{acc_title}] thành công!")
 except Exception as e:
     print(f"\n❌ [LỖI] Có lỗi xảy ra: {e}")
 
-input("\nNhấn Enter để đóng cửa sổ...")
+try:
+    input("\nNhấn Enter để đóng cửa sổ...")
+except Exception:
+    pass
+

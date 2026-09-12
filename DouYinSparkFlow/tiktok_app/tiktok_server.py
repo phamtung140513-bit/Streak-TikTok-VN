@@ -27,6 +27,7 @@ from tiktok_app.tiktok_bot import (
     cancel_qr_login,
     confirm_qr_login,
     qr_login_state,
+    import_tiktok_cookie,
 )
 from tiktok_app.tiktok_scheduler import run_scheduler_loop, scheduler_state
 
@@ -70,6 +71,15 @@ async def get_status():
 @app.post("/api/login/open")
 async def api_open_login(acc_id: str = "acc_1"):
     res = await open_login_window(acc_id)
+    return JSONResponse(res)
+
+
+@app.post("/api/login/cookie")
+async def api_login_cookie(request: Request):
+    data = await request.json()
+    acc_id = data.get("acc_id", "acc_1")
+    raw_cookie = data.get("cookie", "")
+    res = await import_tiktok_cookie(acc_id, raw_cookie)
     return JSONResponse(res)
 
 

@@ -71,7 +71,7 @@
           </h2>
           
           <!-- Acc 1 Box -->
-          <div class="p-3.5 rounded-xl bg-gray-950/70 border border-gray-800 space-y-2">
+          <div class="p-3.5 rounded-xl bg-gray-950/70 border border-gray-800 space-y-2.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold text-gray-300">Tài khoản 1:</span>
               <div id="statusAcc1" class="text-xs font-semibold flex items-center gap-1.5 text-emerald-400">
@@ -79,17 +79,22 @@
               </div>
             </div>
             <div class="grid grid-cols-2 gap-2">
-              <button onclick="startWebQrLogin('acc_1')" class="py-2 px-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-lg border border-gray-700 transition flex items-center justify-center gap-1">
-                <span>📲</span> Quét QR Web
+              <button type="button" onclick="launchBrowserLogin('acc_1')" class="py-2.5 px-2 bg-gray-800 hover:bg-gray-700 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-800/60 transition flex items-center justify-center gap-1 shadow">
+                <span>🖥️</span> Mở Cửa Sổ Login
               </button>
-              <button onclick="launchBrowserLogin('acc_1')" class="py-2 px-2 bg-gray-800 hover:bg-gray-700 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-800/60 transition flex items-center justify-center gap-1">
-                <span>🖥️</span> Mở Cửa Sổ Edge
+              <button type="button" onclick="openCookieModal('acc_1')" class="py-2.5 px-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-lg border border-gray-700 transition flex items-center justify-center gap-1">
+                <span>📋</span> Dán Cookie
+              </button>
+            </div>
+            <div class="text-center pt-0.5">
+              <button type="button" onclick="startWebQrLogin('acc_1')" class="text-[11px] text-gray-400 hover:text-rose-400 underline">
+                Hoặc quét mã QR trực tiếp trên web
               </button>
             </div>
           </div>
 
           <!-- Acc 2 Box -->
-          <div class="p-3.5 rounded-xl bg-gray-950/70 border border-gray-800 space-y-2">
+          <div class="p-3.5 rounded-xl bg-gray-950/70 border border-gray-800 space-y-2.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold text-gray-300">Tài khoản 2:</span>
               <div id="statusAcc2" class="text-xs font-semibold flex items-center gap-1.5 text-amber-400">
@@ -97,11 +102,16 @@
               </div>
             </div>
             <div class="grid grid-cols-2 gap-2">
-              <button onclick="startWebQrLogin('acc_2')" class="py-2 px-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-lg border border-gray-700 transition flex items-center justify-center gap-1">
-                <span>📲</span> Quét QR Web
+              <button type="button" onclick="launchBrowserLogin('acc_2')" class="py-2.5 px-2 bg-rose-950/90 hover:bg-rose-900 text-rose-200 text-xs font-bold rounded-lg border border-rose-700 transition flex items-center justify-center gap-1 shadow-lg shadow-rose-950/50">
+                <span>🖥️</span> Mở Cửa Sổ Login
               </button>
-              <button onclick="launchBrowserLogin('acc_2')" class="py-2 px-2 bg-rose-950/80 hover:bg-rose-900 text-rose-200 text-xs font-bold rounded-lg border border-rose-800 transition flex items-center justify-center gap-1 shadow">
-                <span>🖥️</span> Mở Cửa Sổ Edge
+              <button type="button" onclick="openCookieModal('acc_2')" class="py-2.5 px-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 shadow">
+                <span>📋</span> Dán Cookie / SID
+              </button>
+            </div>
+            <div class="text-center pt-0.5">
+              <button type="button" onclick="startWebQrLogin('acc_2')" class="text-[11px] text-gray-400 hover:text-rose-400 underline">
+                Hoặc quét mã QR trực tiếp trên web
               </button>
             </div>
           </div>
@@ -156,6 +166,42 @@
             <button type="button" onclick="cancelQrLogin()" class="text-[11px] text-gray-500 hover:text-rose-400 transition block mx-auto pt-0.5">
               ✖ Hủy / Đóng khung QR
             </button>
+          </div>
+        </div>
+
+        <!-- Cookie Import Modal / Card -->
+        <div id="cookieModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+              <h3 id="cookieModalTitle" class="text-sm font-bold text-rose-400 flex items-center gap-2">
+                <span>📋</span> Nhập Cookie / SessionID TikTok
+              </h3>
+              <button type="button" onclick="closeCookieModal()" class="text-xs text-gray-400 hover:text-white p-1">✖ Đóng</button>
+            </div>
+
+            <div class="space-y-2 text-left">
+              <label class="block text-xs font-semibold text-gray-300">Dán SessionID hoặc chuỗi Cookie:</label>
+              <textarea id="inputCookieRaw" rows="4" placeholder="Dán mã sessionid (ví dụ: 4a873eb37ee491...) hoặc toàn bộ cookie từ TikTok vào đây..." class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs text-gray-200 focus:border-rose-500 focus:outline-none font-mono"></textarea>
+            </div>
+
+            <div class="bg-gray-950/70 p-3 rounded-xl border border-gray-800 text-[11px] text-gray-400 text-left space-y-1.5">
+              <div class="font-bold text-gray-300 flex items-center justify-between">
+                <span>💡 Cách lấy SessionID (30 giây):</span>
+                <a href="https://www.tiktok.com/login" target="_blank" class="text-rose-400 hover:underline">Mở TikTok Web ↗</a>
+              </div>
+              <div>1. Đăng nhập TikTok trên trình duyệt Chrome/Edge của bạn.</div>
+              <div>2. Bấm <b>F12</b> ➔ chọn tab <b>Application</b> ➔ mục <b>Cookies</b> ➔ <b>https://www.tiktok.com</b>.</div>
+              <div>3. Tìm dòng <b>sessionid</b> ➔ copy giá trị và dán vào ô trên.</div>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+              <button type="button" onclick="closeCookieModal()" class="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-xl transition">
+                Hủy
+              </button>
+              <button type="button" id="btnSubmitCookie" onclick="submitCookieLogin()" class="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-1.5">
+                <span>💾</span> Lưu Cookie
+              </button>
+            </div>
           </div>
         </div>
 
@@ -517,9 +563,60 @@
       }
     }
 
+    let targetCookieAccId = 'acc_2';
+
+    function openCookieModal(accId) {
+      targetCookieAccId = accId;
+      const name = accId === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1';
+      document.getElementById('cookieModalTitle').innerHTML = `<span>📋</span> Nhập Cookie / SessionID [${name}]`;
+      document.getElementById('inputCookieRaw').value = '';
+      document.getElementById('cookieModal').classList.remove('hidden');
+      document.getElementById('inputCookieRaw').focus();
+    }
+
+    function closeCookieModal() {
+      document.getElementById('cookieModal').classList.add('hidden');
+    }
+
+    async function submitCookieLogin() {
+      const btn = document.getElementById('btnSubmitCookie');
+      const raw = document.getElementById('inputCookieRaw').value.trim();
+      if (!raw) {
+        showToast('Vui lòng nhập SessionID hoặc chuỗi Cookie!', true);
+        return;
+      }
+      btn.disabled = true;
+      btn.innerText = '⏳ Đang kiểm tra & lưu cookie...';
+      try {
+        const res = await fetch('/api/login/cookie', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acc_id: targetCookieAccId, cookie: raw })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(data.message || '🎉 Đã lưu và xác thực cookie thành công!');
+          closeCookieModal();
+          loadData();
+          fetchLogs();
+        } else if (data.status === 'warning') {
+          showToast(data.message, true);
+          loadData();
+          fetchLogs();
+        } else {
+          showToast(data.message || 'Lỗi lưu cookie', true);
+        }
+      } catch (err) {
+        showToast('Lỗi gửi cookie: ' + err, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>💾</span> Lưu Cookie';
+      }
+    }
+
     async function launchBrowserLogin(accId) {
       const accName = accId === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1';
-      showToast(`Đang mở cửa sổ Microsoft Edge đăng nhập cho [${accName}]...`);
+      showToast(`Đang mở cửa sổ trình duyệt đăng nhập cho [${accName}]...`);
       try {
         const res = await fetch(`/api/login/open?acc_id=${accId}`, { method: 'POST' });
         const data = await res.json();
@@ -532,6 +629,7 @@
     async function openLoginWindow(accId) {
       launchBrowserLogin(accId);
     }
+
 
     async function triggerTestSend(mode) {
       let targetAcc = mode === 'current' ? activeAccId : null;

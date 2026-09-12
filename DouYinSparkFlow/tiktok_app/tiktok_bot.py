@@ -47,16 +47,37 @@ def get_profile_dir(acc_id="acc_1"):
     return p_dir
 
 
+def check_session_in_cookies_db(cookies_path: Path) -> bool:
+    """Kiểm tra chính xác sự tồn tại của cookie phiên (sessionid, sid_guard, uid_tt) trong SQLite."""
+    if not cookies_path.exists():
+        return False
+    import sqlite3
+    import shutil
+    import tempfile
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+            t_name = tf.name
+        shutil.copyfile(cookies_path, t_name)
+        conn = sqlite3.connect(t_name)
+        c = conn.cursor()
+        c.execute("SELECT 1 FROM cookies WHERE name IN ('sessionid', 'sid_guard', 'uid_tt') LIMIT 1")
+        found = c.fetchone() is not None
+        conn.close()
+        Path(t_name).unlink(missing_ok=True)
+        return found
+    except Exception:
+        return False
+
+
 async def check_login_status(acc_id="acc_1"):
-    """Kiểm tra sơ bộ xem tài khoản đã có dữ liệu đăng nhập hay chưa."""
+    """Kiểm tra xem tài khoản đã có sessionid hợp lệ hay chưa."""
     p_dir = get_profile_dir(acc_id)
-    cookies_dir = p_dir / "Default" / "Network" / "Cookies"
+    cookies_path = p_dir / "Default" / "Network" / "Cookies"
+    if cookies_path.exists():
+        return check_session_in_cookies_db(cookies_path)
     cookies_legacy = p_dir / "Default" / "Cookies"
-    if cookies_dir.exists() or cookies_legacy.exists():
-        return True
-    default_dir = p_dir / "Default"
-    if default_dir.exists() and any(default_dir.iterdir()):
-        return True
+    if cookies_legacy.exists():
+        return check_session_in_cookies_db(cookies_legacy)
     return False
 
 
@@ -66,16 +87,18 @@ async def open_login_window(acc_id="acc_1"):
     bat_file = "dang_nhap_acc2.bat" if acc_id == "acc_2" else "dang_nhap.bat"
     bat_path = REPO_ROOT / bat_file
 
-    logger.info(f"Đang mở trình duyệt đăng nhập cho [{acc_name}]...")
+    logger.info(f"Đang mở trình duyệt đăng nhập cho [{acc_name}] qua {bat_file}...")
 
     if bat_path.exists() and os.name == "nt":
         try:
             import subprocess
-            subprocess.Popen(["cmd.exe", "/c", "start", str(bat_path)], shell=True)
+            # Lệnh start "" "duong_dan" để Windows mở cửa sổ riêng biệt không bị kẹt hay giấu
+            cmd = f'start "" "{bat_path}"'
+            subprocess.Popen(cmd, shell=True, cwd=str(REPO_ROOT))
             current_bot_state["is_login_window_open"] = False
             return {
                 "status": "ok",
-                "message": f"Đã mở cửa sổ đăng nhập cho [{acc_name}]! Hãy quét mã QR TikTok."
+                "message": f"Đã mở cửa sổ đăng nhập cho [{acc_name}]! Hãy quét mã QR trên cửa sổ vừa hiện lên."
             }
         except Exception as e:
             logger.error(f"Lỗi khi chạy {bat_file}: {e}")
@@ -84,6 +107,130 @@ async def open_login_window(acc_id="acc_1"):
         "status": "ok",
         "message": f"Vui lòng nhấp đúp vào file {bat_file} ở thư mục dự án để đăng nhập."
     }
+
+
+async def import_tiktok_cookie(acc_id: str, raw_input: str):
+    """Lưu trực tiếp cookie hoặc sessionid vào hồ sơ trình duyệt của tài khoản."""
+    import time
+    acc_name = "Tài khoản 2" if acc_id == "acc_2" else "Tài khoản 1"
+    raw = (raw_input or "").strip()
+    if not raw:
+        return {"status": "error", "message": "Vui lòng nhập chuỗi Cookie hoặc SessionID."}
+
+    cookies_to_add = []
+    sessionid_val = None
+    expiry = int(time.time() + 365 * 86400)
+
+    if ";" in raw or "=" in raw:
+        pairs = [p.strip() for p in raw.split(";") if p.strip()]
+        for pair in pairs:
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                k = k.strip()
+                v = v.strip()
+                if k == "sessionid":
+                    sessionid_val = v
+                cookies_to_add.append({
+                    "name": k,
+                    "value": v,
+                    "domain": ".tiktok.com",
+                    "path": "/",
+                    "httpOnly": True,
+                    "secure": True,
+                    "expires": expiry
+                })
+    else:
+        sessionid_val = raw
+
+    if sessionid_val:
+        has_sessionid = any(c["name"] == "sessionid" for c in cookies_to_add)
+        if not has_sessionid:
+            cookies_to_add.append({
+                "name": "sessionid",
+                "value": sessionid_val,
+                "domain": ".tiktok.com",
+                "path": "/",
+                "httpOnly": True,
+                "secure": True,
+                "expires": expiry
+            })
+        has_ss = any(c["name"] == "sessionid_ss" for c in cookies_to_add)
+        if not has_ss:
+            cookies_to_add.append({
+                "name": "sessionid_ss",
+                "value": sessionid_val,
+                "domain": ".tiktok.com",
+                "path": "/",
+                "httpOnly": True,
+                "secure": True,
+                "expires": expiry
+            })
+        has_guard = any(c["name"] == "sid_guard" for c in cookies_to_add)
+        if not has_guard:
+            cookies_to_add.append({
+                "name": "sid_guard",
+                "value": sessionid_val,
+                "domain": ".tiktok.com",
+                "path": "/",
+                "httpOnly": True,
+                "secure": True,
+                "expires": expiry
+            })
+
+    if not cookies_to_add:
+        return {"status": "error", "message": "Không tìm thấy sessionid hợp lệ trong chuỗi bạn nhập."}
+
+    p_dir = get_profile_dir(acc_id)
+    playwright = None
+    context = None
+    try:
+        playwright = await async_playwright().start()
+        chan = get_browser_channel()
+        launch_kwargs = {
+            "user_data_dir": str(p_dir),
+            "headless": True,
+            "viewport": {"width": 1280, "height": 800},
+            "user_agent": REAL_USER_AGENT,
+            "args": ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+            "locale": "vi-VN",
+        }
+        if chan:
+            launch_kwargs["channel"] = chan
+        context = await playwright.chromium.launch_persistent_context(**launch_kwargs)
+        await context.add_init_script(STEALTH_SCRIPT)
+        await context.add_cookies(cookies_to_add)
+        
+        # Mở trang messages để lưu SQLite
+        page = context.pages[0] if context.pages else await context.new_page()
+        logger.info(f"Đang kiểm tra phiên cookie mới nhập cho [{acc_name}]...")
+        await page.goto("https://www.tiktok.com/messages", wait_until="domcontentloaded", timeout=25000)
+        await asyncio.sleep(2)
+        cur_url = page.url.lower()
+        is_logged_in = "login" not in cur_url and "messages" in cur_url
+        await context.close()
+        context = None
+
+        if is_logged_in:
+            logger.info(f"✅ Đã xác thực cookie thành công cho [{acc_name}]!")
+            return {"status": "ok", "message": f"🎉 Đã lưu và xác thực thành công cho [{acc_name}]!"}
+        else:
+            logger.warning(f"Đã lưu cookie cho [{acc_name}] nhưng TikTok vẫn chuyển hướng về trang đăng nhập.")
+            return {"status": "warning", "message": f"Đã lưu cookie vào [{acc_name}] nhưng chưa xác thực được. Vui lòng kiểm tra lại sessionid."}
+    except Exception as e:
+        logger.error(f"Lỗi khi nhập cookie cho [{acc_name}]: {e}")
+        return {"status": "error", "message": f"Lỗi: {e}"}
+    finally:
+        if context:
+            try:
+                await context.close()
+            except Exception:
+                pass
+        if playwright:
+            try:
+                await playwright.stop()
+            except Exception:
+                pass
+
 
 
 async def _find_and_type_message(page, message_text):
@@ -547,12 +694,13 @@ async def start_qr_login(acc_id="acc_1"):
 
 
 async def confirm_qr_login():
-    """Người dùng bấm nút 'Đã quét QR' trên giao diện để chốt phiên và lưu ngay lập tức."""
+    """Người dùng bấm nút 'Đã quét QR' trên giao diện để chốt phiên và lưu."""
     global _active_qr_context, _active_qr_playwright
     acc_name = qr_login_state.get("acc_name", "Tài khoản")
-    logger.info(f"Người dùng bấm nút xác nhận 'Đã quét QR' cho [{acc_name}]. Đang chốt lưu phiên...")
+    acc_id = qr_login_state.get("acc_id", "acc_1")
+    logger.info(f"Người dùng bấm nút xác nhận 'Đã quét QR' cho [{acc_name}]. Đang kiểm tra phiên...")
 
-    # Kích hoạt lưu cookie bằng cách chuyển sang trang messages
+    has_session = False
     if _active_qr_context:
         try:
             pages = _active_qr_context.pages
@@ -560,13 +708,30 @@ async def confirm_qr_login():
                 p = pages[0]
                 await p.goto("https://www.tiktok.com/messages", wait_until="domcontentloaded", timeout=15000)
                 await asyncio.sleep(2)
+                cur_url = p.url.lower()
+                cookies = await _active_qr_context.cookies()
+                has_session = any(c.get("name") in ["sessionid", "sessionid_ss", "sid_guard", "uid_tt"] for c in cookies) and "login" not in cur_url
         except Exception as e:
-            logger.warning(f"Điều hướng messages sau quét mã: {e}")
+            logger.warning(f"Kiểm tra phiên sau quét mã: {e}")
 
-    await asyncio.sleep(1)
-    qr_login_state["status"] = "success"
-    qr_login_state["message"] = f"✅ Đã lưu phiên đăng nhập [{acc_name}] thành công!"
-    qr_login_state["is_active"] = False
+    if has_session:
+        qr_login_state["status"] = "success"
+        qr_login_state["message"] = f"✅ Đã lưu phiên đăng nhập [{acc_name}] thành công!"
+        qr_login_state["is_active"] = False
+        res = {"status": "ok", "message": f"🎉 Đã lưu phiên đăng nhập [{acc_name}] thành công!"}
+    else:
+        # Kiểm tra thêm trong db nếu đã lưu trước đó
+        p_dir = get_profile_dir(acc_id)
+        c_path = p_dir / "Default" / "Network" / "Cookies"
+        if c_path.exists() and check_session_in_cookies_db(c_path):
+            qr_login_state["status"] = "success"
+            qr_login_state["message"] = f"✅ Đã lưu phiên đăng nhập [{acc_name}] thành công!"
+            qr_login_state["is_active"] = False
+            res = {"status": "ok", "message": f"🎉 Đã lưu phiên đăng nhập [{acc_name}] thành công!"}
+        else:
+            qr_login_state["status"] = "error"
+            qr_login_state["message"] = f"⚠️ TikTok chưa ghi nhận phiên đăng nhập của [{acc_name}]. Vui lòng bấm 'Mở Cửa Sổ Đăng Nhập' hoặc 'Nhập Cookie'!"
+            res = {"status": "error", "message": "TikTok chưa ghi nhận đăng nhập. Vui lòng bấm 'Mở Cửa Sổ Đăng Nhập' hoặc 'Nhập Cookie' để đăng nhập chuẩn 100%!"}
 
     if _active_qr_context:
         try:
@@ -582,6 +747,7 @@ async def confirm_qr_login():
             pass
         _active_qr_playwright = None
 
-    return {"status": "ok", "message": f"Đã lưu phiên đăng nhập [{acc_name}] thành công!"}
+    return res
+
 
 
