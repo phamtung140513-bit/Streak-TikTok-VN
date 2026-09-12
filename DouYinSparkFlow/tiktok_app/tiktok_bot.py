@@ -114,12 +114,16 @@ async def open_login_window(acc_id="acc_1"):
 
     logger.info(f"Đang mở trình duyệt đăng nhập cho [{acc_name}] qua {bat_file}...")
 
+    # Hủy phiên QR đang chạy (nếu có) để giải phóng khóa thư mục profile
+    await cancel_qr_login()
+    # Dọn dẹp khóa profile cũ
+    p_dir = get_profile_dir(acc_id)
+    cleanup_profile_locks(p_dir)
+
     if bat_path.exists() and os.name == "nt":
         try:
-            import subprocess
-            # Lệnh start "" "duong_dan" để Windows mở cửa sổ riêng biệt không bị kẹt hay giấu
-            cmd = f'start "" "{bat_path}"'
-            subprocess.Popen(cmd, shell=True, cwd=str(REPO_ROOT))
+            # os.startfile luôn mở trong desktop session của user (không bị giấu)
+            os.startfile(str(bat_path))
             current_bot_state["is_login_window_open"] = False
             return {
                 "status": "ok",
@@ -654,19 +658,25 @@ async def start_qr_login(acc_id="acc_1"):
             await _active_qr_context.add_init_script(STEALTH_SCRIPT)
             page = _active_qr_context.pages[0] if _active_qr_context.pages else await _active_qr_context.new_page()
 
-            # ===== XÓA COOKIES CŨ ĐỂ TRÁNH TỰ ĐỘNG ĐĂNG NHẬP =====
-            # Ghi nhớ sessionid cũ (nếu có) để phân biệt session MỚI sau khi quét QR
-            SESSION_COOKIE_NAMES = {"sessionid", "sessionid_ss", "sid_guard", "uid_tt"}
+            # ===== CHỈ XÓA COOKIES SESSION CŨ, GIỮ LẠI ttwid VÀ COOKIES TRACKING =====
+            # TikTok cần ttwid để liên kết phiên QR → KHÔNG ĐƯỢC xóa toàn bộ cookies!
+            SESSION_COOKIE_NAMES = {"sessionid", "sessionid_ss", "sid_guard", "uid_tt", "sid_tt", "sid_ucp_v1"}
             old_session_values = set()
             try:
                 old_cookies = await _active_qr_context.cookies("https://www.tiktok.com")
+                cookies_to_remove = []
                 for c in old_cookies:
                     if c.get("name") in SESSION_COOKIE_NAMES and c.get("value"):
                         old_session_values.add(f"{c['name']}={c['value']}")
-                # Xóa toàn bộ cookies phiên cũ để TikTok hiển thị trang đăng nhập QR
-                if old_cookies:
-                    await _active_qr_context.clear_cookies()
-                    logger.info(f"Đã xóa {len(old_cookies)} cookies cũ của TikTok cho [{acc_name}] để lấy mã QR mới.")
+                        cookies_to_remove.append(c)
+                # Chỉ xóa cookies session, giữ nguyên ttwid và các cookies tracking khác
+                if cookies_to_remove:
+                    for rc in cookies_to_remove:
+                        try:
+                            await page.evaluate(f"document.cookie = '{rc['name']}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.tiktok.com'")
+                        except Exception:
+                            pass
+                    logger.info(f"Đã xóa {len(cookies_to_remove)} cookies session cũ cho [{acc_name}], giữ nguyên ttwid.")
             except Exception as e_clear:
                 logger.warning(f"Không xóa được cookies cũ: {e_clear}")
 
