@@ -39,12 +39,14 @@ templates = Jinja2Templates(directory=str(current_dir / "templates"))
 async def lifespan(app: FastAPI):
     # Khởi động scheduler ngầm khi server bật
     scheduler_task = asyncio.create_task(run_scheduler_loop())
+    logger.info("🚀 Web Server TikTok SparkFlow đã khởi động tại cổng 8787.")
     logger.info("🚀 Web Server Giữ Chuỗi TikTok VN đã khởi động tại cổng 8787.")
     yield
     scheduler_task.cancel()
     logger.info("🛑 Web Server đã tắt.")
 
 
+app = FastAPI(title="TikTok SparkFlow VN", lifespan=lifespan)
 app = FastAPI(title="Giữ Chuỗi TikTok VN", lifespan=lifespan)
 
 

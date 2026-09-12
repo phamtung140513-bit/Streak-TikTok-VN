@@ -18,3 +18,4 @@ echo.
 start "" http://localhost:8787
 "%PY_EXE%" -m tiktok_app.tiktok_server
 pause
+
