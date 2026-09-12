@@ -37,6 +37,10 @@ try:
         
         print("[2] Đang mở trang đăng nhập TikTok (https://www.tiktok.com/login/qrcode)...")
         page.goto("https://www.tiktok.com/login/qrcode")
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
         
         print("\n" + "=" * 60)
         print(f">>> TRÌNH DUYỆT [{acc_title}] ĐÃ HIỆN LÊN TRÊN MÀN HÌNH!")
