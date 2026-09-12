@@ -484,8 +484,14 @@ async def start_qr_login(acc_id="acc_1"):
             for _ in range(180):
                 if not qr_login_state["is_active"]:
                     return
+                try:
+                    cookies = await _active_qr_context.cookies()
+                    has_session = any(c.get("name") in ["sessionid", "sessionid_ss", "sid_guard", "uid_tt"] for c in cookies)
+                except Exception:
+                    has_session = False
+
                 cur_url = page.url.lower()
-                if "tiktok.com" in cur_url and "login" not in cur_url and "about:blank" not in cur_url:
+                if has_session or ("tiktok.com" in cur_url and "login" not in cur_url and "about:blank" not in cur_url):
                     logger.info(f"🎉 Phát hiện đăng nhập thành công cho [{acc_name}]!")
                     qr_login_state["status"] = "success"
                     qr_login_state["message"] = f"✅ Đã đăng nhập và lưu phiên [{acc_name}] thành công!"
@@ -514,4 +520,33 @@ async def start_qr_login(acc_id="acc_1"):
 
     asyncio.create_task(_qr_runner())
     return {"status": "ok", "message": f"Đang khởi tạo mã QR cho [{acc_name}]..."}
+
+
+async def confirm_qr_login():
+    """Người dùng bấm nút 'Đã quét QR' trên giao diện để chốt phiên và lưu ngay lập tức."""
+    global _active_qr_context, _active_qr_playwright
+    acc_name = qr_login_state.get("acc_name", "Tài khoản")
+    logger.info(f"Người dùng bấm nút xác nhận 'Đã quét QR' cho [{acc_name}]. Đang chốt lưu phiên...")
+
+    await asyncio.sleep(1.5)
+    qr_login_state["status"] = "success"
+    qr_login_state["message"] = f"✅ Đã lưu phiên đăng nhập [{acc_name}] thành công!"
+    qr_login_state["is_active"] = False
+
+    if _active_qr_context:
+        try:
+            await _active_qr_context.close()
+        except Exception:
+            pass
+        _active_qr_context = None
+
+    if _active_qr_playwright:
+        try:
+            await _active_qr_playwright.stop()
+        except Exception:
+            pass
+        _active_qr_playwright = None
+
+    return {"status": "ok", "message": f"Đã lưu phiên đăng nhập [{acc_name}] thành công!"}
+
 

@@ -25,6 +25,7 @@ from tiktok_app.tiktok_bot import (
     send_tiktok_messages,
     start_qr_login,
     cancel_qr_login,
+    confirm_qr_login,
     qr_login_state,
 )
 from tiktok_app.tiktok_scheduler import run_scheduler_loop, scheduler_state
@@ -87,6 +88,12 @@ async def api_get_qr_status():
 async def api_cancel_qr_login():
     await cancel_qr_login()
     return JSONResponse({"status": "ok", "message": "Đã hủy phiên quét mã QR."})
+
+
+@app.post("/api/login/qr/confirm")
+async def api_confirm_qr_login():
+    res = await confirm_qr_login()
+    return JSONResponse(res)
 
 
 @app.post("/api/test-send")
