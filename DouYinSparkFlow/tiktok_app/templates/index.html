@@ -78,9 +78,14 @@
                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Đã có phiên
               </div>
             </div>
-            <button onclick="startWebQrLogin('acc_1')" class="w-full py-2 px-3 bg-gray-800 hover:bg-gray-700 text-rose-300 text-xs font-bold rounded-lg border border-gray-700 hover:border-rose-500/50 shadow transition flex items-center justify-center gap-1.5">
-              <span>📲</span> Đăng Nhập Mã QR [Acc 1]
-            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="startWebQrLogin('acc_1')" class="py-2 px-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-lg border border-gray-700 transition flex items-center justify-center gap-1">
+                <span>📲</span> Quét QR Web
+              </button>
+              <button onclick="launchBrowserLogin('acc_1')" class="py-2 px-2 bg-gray-800 hover:bg-gray-700 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-800/60 transition flex items-center justify-center gap-1">
+                <span>🖥️</span> Mở Cửa Sổ Edge
+              </button>
+            </div>
           </div>
 
           <!-- Acc 2 Box -->
@@ -91,9 +96,14 @@
                 <span class="w-2 h-2 rounded-full bg-amber-400"></span> Chưa đăng nhập
               </div>
             </div>
-            <button onclick="startWebQrLogin('acc_2')" class="w-full py-2 px-3 bg-rose-950/70 hover:bg-rose-900/90 text-rose-200 text-xs font-bold rounded-lg border border-rose-800 hover:border-rose-600 shadow transition flex items-center justify-center gap-1.5">
-              <span>📲</span> Đăng Nhập Mã QR [Acc 2]
-            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="startWebQrLogin('acc_2')" class="py-2 px-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-lg border border-gray-700 transition flex items-center justify-center gap-1">
+                <span>📲</span> Quét QR Web
+              </button>
+              <button onclick="launchBrowserLogin('acc_2')" class="py-2 px-2 bg-rose-950/80 hover:bg-rose-900 text-rose-200 text-xs font-bold rounded-lg border border-rose-800 transition flex items-center justify-center gap-1 shadow">
+                <span>🖥️</span> Mở Cửa Sổ Edge
+              </button>
+            </div>
           </div>
 
           <p class="text-[11px] text-gray-500 text-center leading-relaxed">
@@ -507,8 +517,20 @@
       }
     }
 
+    async function launchBrowserLogin(accId) {
+      const accName = accId === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1';
+      showToast(`Đang mở cửa sổ Microsoft Edge đăng nhập cho [${accName}]...`);
+      try {
+        const res = await fetch(`/api/login/open?acc_id=${accId}`, { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || `Đã mở cửa sổ cho [${accName}].`);
+      } catch (err) {
+        showToast('Lỗi: ' + err, true);
+      }
+    }
+
     async function openLoginWindow(accId) {
-      startWebQrLogin(accId);
+      launchBrowserLogin(accId);
     }
 
     async function triggerTestSend(mode) {

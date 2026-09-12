@@ -62,12 +62,11 @@ try:
             "headless": False,
             "args": [
                 "--disable-blink-features=AutomationControlled",
-                "--window-size=1200,850",
-                "--window-position=100,50",
+                "--start-maximized",
                 "--no-first-run",
                 "--no-default-browser-check"
             ],
-            "viewport": {"width": 1200, "height": 850},
+            "no_viewport": True,
             "locale": "vi-VN"
         }
         if browser_channel:
@@ -101,15 +100,22 @@ try:
         enter_thread = threading.Thread(target=wait_for_enter_fallback, daemon=True)
         enter_thread.start()
 
-        # Vòng lặp tự động phát hiện khi đăng nhập xong
+        # Vòng lặp tự động phát hiện khi đăng nhập xong (qua cookie hoặc url)
         while not login_completed.is_set():
             try:
+                cookies = context.cookies()
+                has_session = any(c.get("name") in ["sessionid", "sessionid_ss", "sid_guard", "uid_tt"] for c in cookies)
+                if has_session:
+                    print(f"\n🎉 PHÁT HIỆN COOKIE ĐĂNG NHẬP THÀNH CÔNG VÀO TIKTOK [{acc_title}]!")
+                    login_completed.set()
+                    time.sleep(2)
+                    break
+
                 if context.pages:
                     for current_page in context.pages:
                         cur_url = current_page.url.lower()
-                        # Khi quét mã xong, TikTok chuyển hướng khỏi trang login
                         if "tiktok.com" in cur_url and "login" not in cur_url and "about:blank" not in cur_url:
-                            print(f"\n🎉 PHÁT HIỆN ĐĂNG NHẬP THÀNH CÔNG VÀO TIKTOK [{acc_title}]!")
+                            print(f"\n🎉 PHÁT HIỆN CHUYỂN HƯỚNG ĐĂNG NHẬP THÀNH CÔNG [{acc_title}]!")
                             login_completed.set()
                             time.sleep(2)
                             break
