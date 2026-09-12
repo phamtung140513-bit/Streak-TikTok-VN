@@ -1,5 +1,7 @@
 import os
 import sys
+import time
+import threading
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
@@ -21,6 +23,7 @@ print("=" * 60)
 print(f"Thư mục lưu phiên: {profile_dir}\n")
 
 def cleanup_profile(target_dir):
+    """Đóng sạch các tiến trình cũ đang khóa thư mục."""
     try:
         import psutil
         p_str = str(target_dir).lower()
@@ -28,7 +31,8 @@ def cleanup_profile(target_dir):
             try:
                 cmdline = proc.info.get('cmdline') or []
                 cmd_str = " ".join(cmdline).lower()
-                if p_str in cmd_str and ('chrome' in proc.info.get('name', '').lower() or 'chromium' in proc.info.get('name', '').lower()):
+                p_name = proc.info.get('name', '').lower()
+                if p_str in cmd_str and ('chrome' in p_name or 'edge' in p_name or 'chromium' in p_name):
                     proc.kill()
             except Exception:
                 pass
@@ -42,26 +46,37 @@ def cleanup_profile(target_dir):
         except Exception:
             pass
 
-# Tự động dọn dẹp tiến trình cũ đang chiếm giữ thư mục nếu có
 cleanup_profile(profile_dir)
+
+# Ưu tiên dùng Microsoft Edge trên Windows để tránh bị antivirus/360 chặn cửa sổ
+edge_path = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+browser_channel = "msedge" if edge_path.exists() else None
+browser_name = "Microsoft Edge" if browser_channel == "msedge" else "Chromium"
 
 try:
     with sync_playwright() as p:
-        print("[1] Đang khởi động trình duyệt Chromium...")
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(profile_dir),
-            headless=False,
-            args=[
+        print(f"[1] Đang khởi động trình duyệt {browser_name}...")
+        
+        launch_kwargs = {
+            "user_data_dir": str(profile_dir),
+            "headless": False,
+            "args": [
                 "--disable-blink-features=AutomationControlled",
                 "--window-size=1200,850",
-                "--window-position=120,60"
+                "--window-position=100,50",
+                "--no-first-run",
+                "--no-default-browser-check"
             ],
-            viewport={"width": 1200, "height": 850},
-            locale="vi-VN"
-        )
+            "viewport": {"width": 1200, "height": 850},
+            "locale": "vi-VN"
+        }
+        if browser_channel:
+            launch_kwargs["channel"] = browser_channel
+
+        context = p.chromium.launch_persistent_context(**launch_kwargs)
         page = context.pages[0] if context.pages else context.new_page()
         
-        print("[2] Đang mở trang đăng nhập TikTok (https://www.tiktok.com/login/qrcode)...")
+        print(f"[2] Đang tải trang đăng nhập TikTok (https://www.tiktok.com/login/qrcode)...")
         page.goto("https://www.tiktok.com/login/qrcode")
         try:
             page.bring_to_front()
@@ -69,16 +84,44 @@ try:
             pass
         
         print("\n" + "=" * 60)
-        print(f">>> TRÌNH DUYỆT [{acc_title}] ĐÃ MỞ TRÊN MÀN HÌNH!")
-        print(">>> Vui lòng quét mã QR trên điện thoại hoặc đăng nhập tài khoản.")
-        print(">>> (Nếu bị che, hãy nhìn xuống Taskbar hoặc bấm Alt + Tab)")
+        print(f"👉 CỬA SỔ TRÌNH DUYỆT [{browser_name}] ĐÃ HIỆN LÊN MÀN HÌNH!")
+        print("👉 Vui lòng quét mã QR trên điện thoại để đăng nhập.")
+        print("👉 Hệ thống sẽ TỰ ĐỘNG NHẬN DIỆN khi bạn đăng nhập thành công!")
         print("=" * 60 + "\n")
-        
-        input(f">>> Sau khi đã đăng nhập xong [{acc_title}], hãy nhấn ENTER tại đây: ")
+
+        login_completed = threading.Event()
+
+        def wait_for_enter_fallback():
+            try:
+                input(">>> (Hoặc bạn có thể nhấn phím ENTER tại đây sau khi quét mã xong): ")
+                login_completed.set()
+            except Exception:
+                pass
+
+        enter_thread = threading.Thread(target=wait_for_enter_fallback, daemon=True)
+        enter_thread.start()
+
+        # Vòng lặp tự động phát hiện khi đăng nhập xong
+        while not login_completed.is_set():
+            try:
+                if context.pages:
+                    for current_page in context.pages:
+                        cur_url = current_page.url.lower()
+                        # Khi quét mã xong, TikTok chuyển hướng khỏi trang login
+                        if "tiktok.com" in cur_url and "login" not in cur_url and "about:blank" not in cur_url:
+                            print(f"\n🎉 PHÁT HIỆN ĐĂNG NHẬP THÀNH CÔNG VÀO TIKTOK [{acc_title}]!")
+                            login_completed.set()
+                            time.sleep(2)
+                            break
+            except Exception:
+                break
+            time.sleep(1)
+
+        print("\n[3] Đang lưu cấu hình và đóng trình duyệt...")
         context.close()
         
-    print(f"\n[THÀNH CÔNG] Đã lưu phiên đăng nhập [{acc_title}] thành công!")
+    print(f"\n✅ [THÀNH CÔNG RỰC RỠ] Đã lưu phiên đăng nhập [{acc_title}] thành công!")
 except Exception as e:
-    print(f"\n[LỖI] Có lỗi xảy ra: {e}")
+    print(f"\n❌ [LỖI] Có lỗi xảy ra: {e}")
 
-input("\nNhấn Enter để thoát...")
+input("\nNhấn Enter để đóng cửa sổ...")

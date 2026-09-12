@@ -23,6 +23,13 @@ current_bot_state = {
 }
 
 
+def get_browser_channel():
+    edge_path = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+    if edge_path.exists():
+        return "msedge"
+    return None
+
+
 def get_profile_dir(acc_id="acc_1"):
     """Lấy thư mục hồ sơ trình duyệt tương ứng với tài khoản."""
     if acc_id == "acc_2":
@@ -119,13 +126,17 @@ async def get_tiktok_friends(acc_id="acc_1"):
     friends = []
     try:
         playwright = await async_playwright().start()
-        context = await playwright.chromium.launch_persistent_context(
-            user_data_dir=str(p_dir),
-            headless=True,
-            viewport={"width": 1280, "height": 800},
-            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
-            locale="vi-VN",
-        )
+        chan = get_browser_channel()
+        launch_kwargs = {
+            "user_data_dir": str(p_dir),
+            "headless": True,
+            "viewport": {"width": 1280, "height": 800},
+            "args": ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+            "locale": "vi-VN",
+        }
+        if chan:
+            launch_kwargs["channel"] = chan
+        context = await playwright.chromium.launch_persistent_context(**launch_kwargs)
         page = context.pages[0] if context.pages else await context.new_page()
         await page.goto("https://www.tiktok.com/messages", wait_until="domcontentloaded", timeout=45000)
         
@@ -305,18 +316,22 @@ async def send_tiktok_messages(target_acc_id=None, custom_message=None):
             p_dir = get_profile_dir(acc_id)
 
             logger.info(f"Khởi động trình duyệt cho: [{acc_name}] (Profile: {p_dir.name})...")
-            context = await playwright.chromium.launch_persistent_context(
-                user_data_dir=str(p_dir),
-                headless=is_headless,
-                viewport={"width": 1280, "height": 800},
-                args=[
+            chan = get_browser_channel()
+            launch_kwargs = {
+                "user_data_dir": str(p_dir),
+                "headless": is_headless,
+                "viewport": {"width": 1280, "height": 800},
+                "args": [
                     "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
                     "--disable-infobars",
                     "--start-maximized"
                 ],
-                locale="vi-VN",
-            )
+                "locale": "vi-VN",
+            }
+            if chan:
+                launch_kwargs["channel"] = chan
+            context = await playwright.chromium.launch_persistent_context(**launch_kwargs)
             page = context.pages[0] if context.pages else await context.new_page()
 
             await page.add_init_script("""
