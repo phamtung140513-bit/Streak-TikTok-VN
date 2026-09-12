@@ -342,15 +342,28 @@
       }
     }
 
+    function showToast(msg, isError = false) {
+      const toast = document.createElement('div');
+      toast.className = `fixed bottom-6 right-6 px-5 py-3.5 rounded-xl shadow-2xl text-xs font-semibold z-50 transition-all duration-300 flex items-center gap-2 ${
+        isError ? 'bg-rose-900/90 text-rose-200 border border-rose-700' : 'bg-gray-900/95 text-emerald-300 border border-emerald-500/60 shadow-emerald-950/40'
+      }`;
+      toast.innerHTML = `<span>${isError ? '⚠️' : '✅'}</span><span>${escapeHtml(msg)}</span>`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 350);
+      }, 4000);
+    }
+
     async function openLoginWindow(accId) {
       const accName = accId === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1';
-      if (!confirm(`Bạn có muốn mở trình duyệt để đăng nhập [${accName}] không?`)) return;
       try {
         const res = await fetch(`/api/login/open?acc_id=${accId}`, { method: 'POST' });
         const data = await res.json();
-        alert(data.message || `Đã kích hoạt mở cửa sổ đăng nhập [${accName}].`);
+        showToast(data.message || `Đã mở cửa sổ đăng nhập cho [${accName}]!`);
       } catch (err) {
-        alert('Lỗi: ' + err);
+        showToast('Lỗi: ' + err, true);
       } finally {
         fetchLogs();
         loadData();
@@ -359,22 +372,21 @@
 
     async function triggerTestSend(mode) {
       let targetAcc = mode === 'current' ? activeAccId : null;
-      let confirmText = mode === 'current' ? `Bạn có muốn gửi thử cho [${activeAccId === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1'}] ngay không?` : 'Bạn có muốn gửi thử cho CẢ 2 TÀI KHOẢN cùng lúc không?';
-      if (!confirm(confirmText)) return;
-
+      const targetLabel = targetAcc ? (targetAcc === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1') : 'Cả 2 Tài Khoản';
+      
       const btn = mode === 'current' ? document.getElementById('btnTestCurrent') : document.getElementById('btnTestAll');
       btn.disabled = true;
       const oldHtml = btn.innerHTML;
-      btn.innerHTML = '<span>⏳ Đang xử lý...</span>';
+      btn.innerHTML = '<span>⏳ Đang gửi...</span>';
 
       try {
         await saveSettings();
         const url = targetAcc ? `/api/test-send?acc_id=${targetAcc}` : '/api/test-send';
         const res = await fetch(url, { method: 'POST' });
         const data = await res.json();
-        alert(data.message || 'Đã bắt đầu gửi thử.');
+        showToast(data.message || `Đã bắt đầu gửi thử cho [${targetLabel}].`);
       } catch (err) {
-        alert('Lỗi: ' + err);
+        showToast('Lỗi: ' + err, true);
       } finally {
         btn.disabled = false;
         btn.innerHTML = oldHtml;
