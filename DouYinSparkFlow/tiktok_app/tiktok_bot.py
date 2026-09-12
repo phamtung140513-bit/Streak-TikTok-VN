@@ -654,6 +654,22 @@ async def start_qr_login(acc_id="acc_1"):
             await _active_qr_context.add_init_script(STEALTH_SCRIPT)
             page = _active_qr_context.pages[0] if _active_qr_context.pages else await _active_qr_context.new_page()
 
+            # ===== XÓA COOKIES CŨ ĐỂ TRÁNH TỰ ĐỘNG ĐĂNG NHẬP =====
+            # Ghi nhớ sessionid cũ (nếu có) để phân biệt session MỚI sau khi quét QR
+            SESSION_COOKIE_NAMES = {"sessionid", "sessionid_ss", "sid_guard", "uid_tt"}
+            old_session_values = set()
+            try:
+                old_cookies = await _active_qr_context.cookies("https://www.tiktok.com")
+                for c in old_cookies:
+                    if c.get("name") in SESSION_COOKIE_NAMES and c.get("value"):
+                        old_session_values.add(f"{c['name']}={c['value']}")
+                # Xóa toàn bộ cookies phiên cũ để TikTok hiển thị trang đăng nhập QR
+                if old_cookies:
+                    await _active_qr_context.clear_cookies()
+                    logger.info(f"Đã xóa {len(old_cookies)} cookies cũ của TikTok cho [{acc_name}] để lấy mã QR mới.")
+            except Exception as e_clear:
+                logger.warning(f"Không xóa được cookies cũ: {e_clear}")
+
             # Bắt trực tiếp mã QR base64 từ phản hồi API của TikTok
             async def on_response(res):
                 if not qr_login_state.get("qr_base64") and "get_qrcode" in res.url:
@@ -695,19 +711,27 @@ async def start_qr_login(acc_id="acc_1"):
             if not qr_login_state.get("qr_base64"):
                 raise RuntimeError("Không tìm thấy mã QR trên trang TikTok. Vui lòng bấm thử lại.")
 
+            # ===== CHỜ NGƯỜI DÙNG QUÉT MÃ - CHỈ PHÁT HIỆN COOKIE MỚI =====
             # Vòng lặp tự động phát hiện khi người dùng quét và bấm xác nhận trên điện thoại (4 phút)
-            for _ in range(240):
+            logger.info(f"Đang chờ người dùng quét mã QR cho [{acc_name}]... (tối đa 4 phút)")
+            for tick in range(240):
                 if not qr_login_state["is_active"]:
                     return
                 try:
-                    cookies = await _active_qr_context.cookies()
-                    has_session = any(c.get("name") in ["sessionid", "sessionid_ss", "sid_guard", "uid_tt"] for c in cookies)
+                    cookies = await _active_qr_context.cookies("https://www.tiktok.com")
+                    # Chỉ phát hiện thành công khi xuất hiện cookie session MỚI (không trùng cũ)
+                    new_session = False
+                    for c in cookies:
+                        if c.get("name") in SESSION_COOKIE_NAMES and c.get("value"):
+                            key = f"{c['name']}={c['value']}"
+                            if key not in old_session_values:
+                                new_session = True
+                                break
                 except Exception:
-                    has_session = False
+                    new_session = False
 
-                cur_url = page.url.lower()
-                if has_session or ("tiktok.com" in cur_url and "login" not in cur_url and "about:blank" not in cur_url):
-                    logger.info(f"🎉 Phát hiện đăng nhập thành công cho [{acc_name}]!")
+                if new_session:
+                    logger.info(f"🎉 Phát hiện phiên đăng nhập MỚI cho [{acc_name}]!")
                     qr_login_state["status"] = "success"
                     qr_login_state["message"] = f"✅ Đã đăng nhập và lưu phiên [{acc_name}] thành công!"
                     await asyncio.sleep(2.5)
