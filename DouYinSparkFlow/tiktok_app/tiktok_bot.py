@@ -23,6 +23,12 @@ current_bot_state = {
     "is_login_window_open": False
 }
 
+REAL_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+STEALTH_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+window.chrome = { runtime: {} };
+"""
+
 
 def get_browser_channel():
     edge_path = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
@@ -132,15 +138,24 @@ async def get_tiktok_friends(acc_id="acc_1"):
             "user_data_dir": str(p_dir),
             "headless": True,
             "viewport": {"width": 1280, "height": 800},
+            "user_agent": REAL_USER_AGENT,
             "args": ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
             "locale": "vi-VN",
         }
         if chan:
             launch_kwargs["channel"] = chan
         context = await playwright.chromium.launch_persistent_context(**launch_kwargs)
+        await context.add_init_script(STEALTH_SCRIPT)
         page = context.pages[0] if context.pages else await context.new_page()
         await page.goto("https://www.tiktok.com/messages", wait_until="domcontentloaded", timeout=45000)
         
+        try:
+            close_buttons = page.locator('div[class*="DivNotification"] button, div[class*="toast"] button, [aria-label="Close"]')
+            if await close_buttons.count() > 0:
+                await close_buttons.first.click(timeout=2000)
+        except Exception:
+            pass
+
         try:
             await page.wait_for_selector('div[class*="DivItemWrapper"], [data-e2e="chat-item"]', timeout=15000)
         except Exception:
@@ -440,6 +455,7 @@ async def start_qr_login(acc_id="acc_1"):
                 "user_data_dir": str(p_dir),
                 "headless": True,
                 "viewport": {"width": 1280, "height": 800},
+                "user_agent": REAL_USER_AGENT,
                 "args": ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
                 "locale": "vi-VN"
             }
@@ -447,6 +463,7 @@ async def start_qr_login(acc_id="acc_1"):
                 launch_args["channel"] = chan
 
             _active_qr_context = await _active_qr_playwright.chromium.launch_persistent_context(**launch_args)
+            await _active_qr_context.add_init_script(STEALTH_SCRIPT)
             page = _active_qr_context.pages[0] if _active_qr_context.pages else await _active_qr_context.new_page()
 
             await page.goto("https://www.tiktok.com/login/qrcode", wait_until="domcontentloaded", timeout=45000)
@@ -528,7 +545,18 @@ async def confirm_qr_login():
     acc_name = qr_login_state.get("acc_name", "Tài khoản")
     logger.info(f"Người dùng bấm nút xác nhận 'Đã quét QR' cho [{acc_name}]. Đang chốt lưu phiên...")
 
-    await asyncio.sleep(1.5)
+    # Kích hoạt lưu cookie bằng cách chuyển sang trang messages
+    if _active_qr_context:
+        try:
+            pages = _active_qr_context.pages
+            if pages:
+                p = pages[0]
+                await p.goto("https://www.tiktok.com/messages", wait_until="domcontentloaded", timeout=15000)
+                await asyncio.sleep(2)
+        except Exception as e:
+            logger.warning(f"Điều hướng messages sau quét mã: {e}")
+
+    await asyncio.sleep(1)
     qr_login_state["status"] = "success"
     qr_login_state["message"] = f"✅ Đã lưu phiên đăng nhập [{acc_name}] thành công!"
     qr_login_state["is_active"] = False
