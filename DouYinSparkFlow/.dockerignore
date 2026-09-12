@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.git/
+.github/
+tests/
+logs/
+config.json
+usersData.json
+webui_settings.json
+*.log

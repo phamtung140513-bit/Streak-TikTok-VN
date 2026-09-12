@@ -1,0 +1,116 @@
+services:
+  proxy:
+    image: metacubex/mihomo:latest
+    container_name: mihomo
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    ports:
+      - "${PROXY_BIND_ADDRESS:-127.0.0.1}:${PROXY_HTTP_PORT:-7890}:7890"
+      - "${PROXY_BIND_ADDRESS:-127.0.0.1}:${PROXY_CONTROLLER_PORT:-9090}:9090"
+    volumes:
+      - ./proxy/config.yaml:/root/.config/mihomo/config.yaml:ro
+
+  web:
+    build:
+      context: ./DouYinSparkFlow
+      dockerfile: Dockerfile.server
+      network: host
+      args:
+        PLAYWRIGHT_BASE_IMAGE: ${PLAYWRIGHT_BASE_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/mcr.microsoft.com/playwright/python:v1.56.0-jammy}
+        NODE_RUNTIME_IMAGE: ${NODE_RUNTIME_IMAGE:-node:22-bookworm-slim}
+        HTTP_PROXY: ${HTTP_PROXY_BUILD:-}
+        HTTPS_PROXY: ${HTTPS_PROXY_BUILD:-}
+        ALL_PROXY: ${ALL_PROXY_BUILD:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}
+    image: douyin-sparkflow:local
+    container_name: douyin-web
+    restart: unless-stopped
+    depends_on:
+      - proxy
+      - login-desktop
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SPARKFLOW_LOGIN_DESKTOP_API_URL: http://login-desktop:18090
+      LOGIN_DESKTOP_PUBLIC_PORT: ${LOGIN_DESKTOP_WEB_PORT:-8788}
+      SPARKFLOW_LOGIN_DESKTOP_PUBLIC_URL: ${LOGIN_DESKTOP_PUBLIC_URL:-/login-desktop/proxy/vnc.html?autoconnect=1&resize=scale&view_only=0&path=login-desktop/proxy/websockify}
+      SPARKFLOW_LOGIN_DESKTOP_NOVNC_URL: http://login-desktop:6080
+      SPARKFLOW_LOGIN_DESKTOP_NOVNC_WS_URL: ws://login-desktop:6080/websockify
+      SPARKFLOW_SESSION_COOKIE_SECURE: ${SPARKFLOW_SESSION_COOKIE_SECURE:-0}
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-}
+    ports:
+      - "${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-8787}:8787"
+    command: python main.py --web --host 0.0.0.0 --port 8787
+    volumes:
+      - ./DouYinSparkFlow:/app
+      - ./DouYinSparkFlow/logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./state/cron:/host-spool-cron
+      - .:/opt/douyin-sparkflow
+
+  login-desktop:
+    image: douyin-sparkflow:local
+    container_name: login-desktop
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - proxy
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      DISPLAY: :99
+      LOGIN_DESKTOP_API_PORT: "18090"
+      LOGIN_DESKTOP_WEB_PORT: "6080"
+      LOGIN_DESKTOP_IDLE_TIMEOUT_SECONDS: ${LOGIN_DESKTOP_IDLE_TIMEOUT_SECONDS:-1800}
+      LOGIN_DESKTOP_STOP_AFTER_EXPORT_SECONDS: ${LOGIN_DESKTOP_STOP_AFTER_EXPORT_SECONDS:-60}
+      LOGIN_DESKTOP_STATUS_CACHE_SECONDS: ${LOGIN_DESKTOP_STATUS_CACHE_SECONDS:-15}
+
+      LOGIN_DESKTOP_PROXY_MODE: ${LOGIN_DESKTOP_PROXY_MODE:-auto}
+      LOGIN_DESKTOP_PROXY: ${LOGIN_DESKTOP_PROXY:-http://proxy:7890}
+      LOGIN_DESKTOP_PREFLIGHT_TIMEOUT_SECONDS: ${LOGIN_DESKTOP_PREFLIGHT_TIMEOUT_SECONDS:-15}
+      LOGIN_DESKTOP_NETWORK_CACHE_SECONDS: ${LOGIN_DESKTOP_NETWORK_CACHE_SECONDS:-30}
+
+    ports:
+      - "${LOGIN_DESKTOP_BIND_ADDRESS:-127.0.0.1}:${LOGIN_DESKTOP_WEB_PORT:-8788}:6080"
+    command: bash /app/scripts/start_login_desktop.sh
+    cpus: ${LOGIN_DESKTOP_CPUS:-0.8}
+    mem_limit: ${LOGIN_DESKTOP_MEMORY_LIMIT:-1200m}
+    pids_limit: ${LOGIN_DESKTOP_PIDS_LIMIT:-256}
+    volumes:
+      - ./DouYinSparkFlow:/app
+      - ./DouYinSparkFlow/logs:/app/logs
+      - ./state/login-profile:/data/login-profile
+
+  scheduler:
+    image: douyin-sparkflow:local
+    container_name: douyin-scheduler
+    restart: unless-stopped
+    depends_on:
+      - proxy
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      PYTHONUNBUFFERED: "1"
+    command: python /app/scripts/cron_runner.py /host-spool-cron/root
+    volumes:
+      - ./DouYinSparkFlow:/app
+      - ./DouYinSparkFlow/logs:/app/logs
+      - ./state/cron:/host-spool-cron
+      - ./state/browser-profiles:/opt/douyin-sparkflow/state/browser-profiles
+
+  task:
+    image: douyin-sparkflow:local
+    container_name: douyin-task
+    depends_on:
+      - proxy
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      PYTHONUNBUFFERED: "1"
+    command: python main.py --doTask
+    volumes:
+      - ./DouYinSparkFlow:/app
+      - ./DouYinSparkFlow/logs:/app/logs
+      - ./state/browser-profiles:/opt/douyin-sparkflow/state/browser-profiles
+    restart: "no"

@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok SparkFlow - Quản Lý 2 Tài Khoản Giữ Lửa</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fff1f2',
+              500: '#f43f5e',
+              600: '#e11d48',
+              700: '#be123c',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1f2937; }
+    ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-sans antialiased">
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    
+    <!-- Top Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 mb-8 border-b border-gray-800 gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-12 h-12 bg-gradient-to-tr from-rose-600 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-rose-900/30 text-2xl">
+          🔥
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-white via-gray-200 to-rose-400 bg-clip-text text-transparent">
+            TikTok SparkFlow VN (2 Tài Khoản)
+          </h1>
+          <p class="text-sm text-gray-400">Tự động gửi tin nhắn giữ chuỗi ngọn lửa TikTok Việt Nam lúc 05:00 sáng</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <div id="statusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Scheduler Đang Chạy</span>
+        </div>
+        <button onclick="triggerTestSend('current')" id="btnTestCurrent" class="px-3.5 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-medium text-xs rounded-lg shadow transition flex items-center gap-1.5">
+          <span>🚀 Gửi Thử Acc Này</span>
+        </button>
+        <button onclick="triggerTestSend('all')" id="btnTestAll" class="px-3.5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium text-xs rounded-lg border border-gray-700 transition flex items-center gap-1.5">
+          <span>⚡ Gửi Cả 2 Acc</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Grid Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Left Column: Accounts & Schedule -->
+      <div class="space-y-6">
+        
+        <!-- Account Status Card -->
+        <div class="bg-gray-900/80 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm space-y-4">
+          <h2 class="text-base font-semibold text-gray-200 flex items-center gap-2">
+            <span>👥</span> Quản Lý Tài Khoản (2 Acc)
+          </h2>
+          
+          <!-- Acc 1 Box -->
+          <div class="p-3.5 rounded-xl bg-gray-950/70 border border-gray-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-gray-300">Tài khoản 1:</span>
+              <div id="statusAcc1" class="text-xs font-semibold flex items-center gap-1.5 text-emerald-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Đã có phiên
+              </div>
+            </div>
+            <button onclick="openLoginWindow('acc_1')" class="w-full py-1.5 px-3 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-lg border border-gray-700 transition">
+              🔓 Đăng Nhập Tài Khoản 1
+            </button>
+          </div>
+
+          <!-- Acc 2 Box -->
+          <div class="p-3.5 rounded-xl bg-gray-950/70 border border-gray-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-gray-300">Tài khoản 2:</span>
+              <div id="statusAcc2" class="text-xs font-semibold flex items-center gap-1.5 text-amber-400">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span> Chưa đăng nhập
+              </div>
+            </div>
+            <button onclick="openLoginWindow('acc_2')" class="w-full py-1.5 px-3 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-medium rounded-lg border border-rose-800 transition">
+              🔓 Đăng Nhập Tài Khoản 2 (Mới)
+            </button>
+          </div>
+
+          <p class="text-[11px] text-gray-500 text-center leading-relaxed">
+            Mỗi tài khoản lưu phiên ở thư mục riêng, không bị đá phiên nhau.
+          </p>
+        </div>
+
+        <!-- Schedule Info Card -->
+        <div class="bg-gray-900/80 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
+          <h2 class="text-base font-semibold text-gray-200 mb-4 flex items-center gap-2">
+            <span>⏰</span> Lịch Gửi Hàng Ngày
+          </h2>
+          <div class="space-y-3">
+            <div class="flex justify-between items-center text-sm p-3 bg-gray-950/70 rounded-xl border border-gray-800">
+              <span class="text-gray-400">Giờ kích hoạt:</span>
+              <span id="displaySendTime" class="font-bold text-rose-400 text-base">05:00 Sáng</span>
+            </div>
+            <div class="flex justify-between items-center text-xs p-3 bg-gray-950/70 rounded-xl border border-gray-800">
+              <span class="text-gray-400">Lần chạy tiếp theo:</span>
+              <span id="displayNextRun" class="font-mono text-gray-300">Đang tính...</span>
+            </div>
+            <div class="flex justify-between items-center text-xs p-3 bg-gray-950/70 rounded-xl border border-gray-800">
+              <span class="text-gray-400">Trạng thái gần nhất:</span>
+              <span id="displayLastStatus" class="text-gray-300 truncate max-w-[150px]">Sẵn sàng</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Center & Right: Settings & Logs -->
+      <div class="lg:col-span-2 space-y-6">
+
+        <!-- Settings Card with Account Tabs -->
+        <div class="bg-gray-900/80 border border-gray-800 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
+          
+          <!-- Header with Account Tabs -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-gray-800 gap-3">
+            <div class="flex items-center gap-2">
+              <button type="button" id="tabBtnAcc1" onclick="switchAccountTab('acc_1')" class="px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white shadow transition">
+                👤 Cấu Hình Acc 1
+              </button>
+              <button type="button" id="tabBtnAcc2" onclick="switchAccountTab('acc_2')" class="px-4 py-2 text-xs font-medium rounded-xl bg-gray-800 text-gray-400 hover:text-white border border-gray-700 transition">
+                👤 Cấu Hình Acc 2
+              </button>
+            </div>
+            <span id="saveNotify" class="text-xs text-emerald-400 hidden font-normal">✓ Đã lưu cấu hình tự động</span>
+          </div>
+
+          <form id="configForm" onsubmit="saveSettings(event)" class="space-y-4">
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Send Time -->
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Giờ gửi hàng ngày (HH:MM)</label>
+                <input type="time" id="inputSendTime" name="send_time" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2 text-sm text-gray-200 focus:outline-none focus:border-rose-500">
+                <p class="text-[11px] text-gray-500 mt-1">Mặc định: 05:00 sáng mỗi ngày.</p>
+              </div>
+
+              <!-- Chat Count -->
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Số lượng hội thoại gửi tối đa</label>
+                <input type="number" id="inputRecentCount" name="recent_chat_count" min="1" max="50" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2 text-sm text-gray-200 focus:outline-none focus:border-rose-500">
+                <p class="text-[11px] text-gray-500 mt-1">Nếu không chọn bạn bè cụ thể, bot sẽ gửi cho N người này.</p>
+              </div>
+            </div>
+
+            <!-- Specific Friends with Scan Feature -->
+            <div class="space-y-2 pt-2">
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                  <span>🎯</span> Danh Sách Bạn Bè Gửi (<span id="currentAccLabelText" class="text-rose-400">Acc 1</span>)
+                </label>
+                <button type="button" onclick="scanFriends()" id="btnScanFriends" class="text-xs text-rose-400 hover:text-rose-300 transition flex items-center gap-1 font-semibold">
+                  <span>🔄 Lấy danh sách bạn bè TikTok</span>
+                </button>
+              </div>
+
+              <!-- Selected count label -->
+              <div id="selectedCountLabel" class="text-xs px-3 py-2 bg-gray-950 rounded-xl border border-gray-800 text-gray-300">
+                👉 <span class="text-amber-400 font-medium">Chưa chọn ai</span> (Hệ thống sẽ gửi cho các cuộc hội thoại gần nhất)
+              </div>
+
+              <!-- Discovered Friends Chips Container -->
+              <div id="friendsChipsContainer" class="p-3 bg-gray-950 border border-gray-800 rounded-xl min-h-[50px] flex flex-wrap gap-2 items-center">
+                <span class="text-xs text-gray-500 italic">Bấm "Lấy danh sách bạn bè TikTok" để tải danh sách vào đây.</span>
+              </div>
+
+              <input type="text" id="inputTargetFriends" name="target_friends" placeholder="Ví dụ: VTT miss, hoanghiep..." class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-rose-500">
+              <p class="text-[11px] text-gray-500">Bấm trực tiếp vào tên bạn bè ở khung trên hoặc gõ tên (ngăn cách bằng dấu phẩy).</p>
+            </div>
+
+            <!-- Message Templates -->
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">
+                Mẫu tin nhắn giữ chuỗi (Mỗi dòng một câu, bot sẽ chọn ngẫu nhiên)
+              </label>
+              <textarea id="inputMessages" rows="3" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-rose-500"></textarea>
+            </div>
+
+            <!-- Additional options -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-gray-800/80">
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
+                  <input type="checkbox" id="inputEnabled" class="rounded bg-gray-950 border-gray-800 text-rose-600 focus:ring-0">
+                  <span>Bật chạy tự động</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
+                  <input type="checkbox" id="inputHeadless" class="rounded bg-gray-950 border-gray-800 text-rose-600 focus:ring-0">
+                  <span>Chạy ẩn trình duyệt (Headless)</span>
+                </label>
+              </div>
+
+              <button type="submit" class="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-white text-xs font-semibold rounded-xl border border-gray-700 transition">
+                💾 Lưu Cấu Hình
+              </button>
+            </div>
+
+          </form>
+        </div>
+
+        <!-- Live Logs Card -->
+        <div class="bg-gray-900/80 border border-gray-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-semibold text-gray-200 flex items-center gap-2">
+              <span>📋</span> Nhật Ký Hoạt Động (Live Logs)
+            </h2>
+            <button onclick="fetchLogs()" class="text-xs text-gray-400 hover:text-white transition">
+              🔄 Làm mới
+            </button>
+          </div>
+          
+          <div id="logContainer" class="h-64 overflow-y-auto bg-gray-950 p-3 rounded-xl font-mono text-xs text-gray-300 space-y-1 border border-gray-800/80 leading-relaxed">
+            <div class="text-gray-500 italic">Đang tải nhật ký...</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    let globalConfig = null;
+    let activeAccId = 'acc_1';
+    let availableFriendsMap = { 'acc_1': [], 'acc_2': [] };
+
+    function switchAccountTab(accId) {
+      activeAccId = accId;
+      
+      const btn1 = document.getElementById('tabBtnAcc1');
+      const btn2 = document.getElementById('tabBtnAcc2');
+      const labelText = document.getElementById('currentAccLabelText');
+
+      if (accId === 'acc_1') {
+        btn1.className = 'px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white shadow transition';
+        btn2.className = 'px-4 py-2 text-xs font-medium rounded-xl bg-gray-800 text-gray-400 hover:text-white border border-gray-700 transition';
+        labelText.innerText = 'Tài Khoản 1';
+      } else {
+        btn2.className = 'px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white shadow transition';
+        btn1.className = 'px-4 py-2 text-xs font-medium rounded-xl bg-gray-800 text-gray-400 hover:text-white border border-gray-700 transition';
+        labelText.innerText = 'Tài Khoản 2';
+      }
+
+      loadActiveAccountForm();
+    }
+
+    function getAccountConfig(accId) {
+      if (!globalConfig || !globalConfig.accounts) return null;
+      return globalConfig.accounts.find(a => a.id === accId) || globalConfig.accounts[0];
+    }
+
+    function loadActiveAccountForm() {
+      const acc = getAccountConfig(activeAccId);
+      if (!acc) return;
+
+      document.getElementById('inputTargetFriends').value = (acc.target_friends || []).join(', ');
+      document.getElementById('inputMessages').value = (acc.messages || []).join('\n');
+      document.getElementById('inputRecentCount').value = acc.recent_chat_count || 5;
+
+      renderFriendsChips();
+    }
+
+    async function loadData() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        globalConfig = data.config || {};
+        
+        // Status Acc 1
+        const s1 = document.getElementById('statusAcc1');
+        if (data.is_logged_in_acc1) {
+          s1.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Đã lưu phiên';
+          s1.className = 'text-xs font-semibold flex items-center gap-1.5 text-emerald-400';
+        } else {
+          s1.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400"></span> Chưa đăng nhập';
+          s1.className = 'text-xs font-semibold flex items-center gap-1.5 text-amber-400';
+        }
+
+        // Status Acc 2
+        const s2 = document.getElementById('statusAcc2');
+        if (data.is_logged_in_acc2) {
+          s2.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Đã lưu phiên';
+          s2.className = 'text-xs font-semibold flex items-center gap-1.5 text-emerald-400';
+        } else {
+          s2.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400"></span> Chưa đăng nhập';
+          s2.className = 'text-xs font-semibold flex items-center gap-1.5 text-amber-400';
+        }
+
+        document.getElementById('displaySendTime').innerText = (globalConfig.send_time || '05:00') + ' Sáng';
+        document.getElementById('displayNextRun').innerText = data.scheduler.next_run_display || 'Chưa xác định';
+        document.getElementById('displayLastStatus').innerText = data.bot_state.last_status || 'Sẵn sàng';
+
+        // Global fields
+        document.getElementById('inputSendTime').value = globalConfig.send_time || '05:00';
+        document.getElementById('inputEnabled').checked = globalConfig.enabled !== false;
+        document.getElementById('inputHeadless').checked = !!globalConfig.headless;
+
+        loadActiveAccountForm();
+
+      } catch (err) {
+        console.error('Error loading status:', err);
+      }
+    }
+
+    async function fetchLogs() {
+      try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+        const container = document.getElementById('logContainer');
+        if (data.logs && data.logs.length > 0) {
+          container.innerHTML = data.logs.map(log => {
+            let color = 'text-gray-300';
+            if (log.level === 'ERROR') color = 'text-rose-400 font-semibold';
+            else if (log.level === 'WARNING') color = 'text-amber-400';
+            else if (log.message && log.message.includes('✅')) color = 'text-emerald-400 font-medium';
+            return `<div class="${color}"><span class="text-gray-500">[${log.timestamp}]</span> ${escapeHtml(log.message)}</div>`;
+          }).join('');
+          container.scrollTop = container.scrollHeight;
+        } else {
+          container.innerHTML = '<div class="text-gray-500 italic">Chưa có nhật ký nào.</div>';
+        }
+      } catch (err) {
+        console.error('Error fetching logs:', err);
+      }
+    }
+
+    async function openLoginWindow(accId) {
+      const accName = accId === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1';
+      if (!confirm(`Bạn có muốn mở trình duyệt để đăng nhập [${accName}] không?`)) return;
+      try {
+        const res = await fetch(`/api/login/open?acc_id=${accId}`, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || `Đã kích hoạt mở cửa sổ đăng nhập [${accName}].`);
+      } catch (err) {
+        alert('Lỗi: ' + err);
+      } finally {
+        fetchLogs();
+        loadData();
+      }
+    }
+
+    async function triggerTestSend(mode) {
+      let targetAcc = mode === 'current' ? activeAccId : null;
+      let confirmText = mode === 'current' ? `Bạn có muốn gửi thử cho [${activeAccId === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1'}] ngay không?` : 'Bạn có muốn gửi thử cho CẢ 2 TÀI KHOẢN cùng lúc không?';
+      if (!confirm(confirmText)) return;
+
+      const btn = mode === 'current' ? document.getElementById('btnTestCurrent') : document.getElementById('btnTestAll');
+      btn.disabled = true;
+      const oldHtml = btn.innerHTML;
+      btn.innerHTML = '<span>⏳ Đang xử lý...</span>';
+
+      try {
+        await saveSettings();
+        const url = targetAcc ? `/api/test-send?acc_id=${targetAcc}` : '/api/test-send';
+        const res = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Đã bắt đầu gửi thử.');
+      } catch (err) {
+        alert('Lỗi: ' + err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+        fetchLogs();
+        loadData();
+      }
+    }
+
+    async function saveSettings(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      if (!globalConfig) globalConfig = {};
+
+      const send_time = document.getElementById('inputSendTime').value || '05:00';
+      const enabled = document.getElementById('inputEnabled').checked;
+      const headless = document.getElementById('inputHeadless').checked;
+
+      // Update current account in accounts array
+      if (!globalConfig.accounts) {
+        globalConfig.accounts = [
+          { id: 'acc_1', name: 'Tài khoản 1', enabled: true, target_friends: [], messages: [] },
+          { id: 'acc_2', name: 'Tài khoản 2', enabled: true, target_friends: [], messages: [] }
+        ];
+      }
+
+      let acc = globalConfig.accounts.find(a => a.id === activeAccId);
+      if (!acc) {
+        acc = { id: activeAccId, name: activeAccId === 'acc_2' ? 'Tài khoản 2' : 'Tài khoản 1' };
+        globalConfig.accounts.push(acc);
+      }
+
+      const friendsRaw = document.getElementById('inputTargetFriends').value;
+      acc.target_friends = friendsRaw.split(',').map(s => s.trim()).filter(Boolean);
+      const messagesRaw = document.getElementById('inputMessages').value;
+      acc.messages = messagesRaw.split('\n').map(s => s.trim()).filter(Boolean);
+      acc.recent_chat_count = parseInt(document.getElementById('inputRecentCount').value) || 5;
+
+      const payload = {
+        ...globalConfig,
+        send_time,
+        enabled,
+        headless
+      };
+
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          const notify = document.getElementById('saveNotify');
+          if (notify) {
+            notify.classList.remove('hidden');
+            setTimeout(() => notify.classList.add('hidden'), 2500);
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi lưu cấu hình:', err);
+      }
+    }
+
+    async function scanFriends() {
+      const btn = document.getElementById('btnScanFriends');
+      btn.innerText = '⏳ Đang quét...';
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/friends?acc_id=${activeAccId}`);
+        const data = await res.json();
+        availableFriendsMap[activeAccId] = data.friends || [];
+        renderFriendsChips();
+      } catch (err) {
+        alert('Lỗi khi quét bạn bè: ' + err);
+      } finally {
+        btn.innerText = '🔄 Lấy danh sách bạn bè TikTok';
+        btn.disabled = false;
+        fetchLogs();
+      }
+    }
+
+    function renderFriendsChips() {
+      const container = document.getElementById('friendsChipsContainer');
+      const currentSelected = document.getElementById('inputTargetFriends').value
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const label = document.getElementById('selectedCountLabel');
+      if (label) {
+        if (currentSelected.length > 0) {
+          label.innerHTML = `👉 <span class="text-rose-400 font-bold">Chỉ gửi cho đúng ${currentSelected.length} người</span> đã chọn: <span class="text-gray-300 font-medium">${currentSelected.join(', ')}</span>`;
+        } else {
+          label.innerHTML = `👉 <span class="text-amber-400 font-medium">Chưa chọn ai</span> (Hệ thống sẽ gửi cho các cuộc hội thoại gần nhất)`;
+        }
+      }
+
+      const list = availableFriendsMap[activeAccId] || [];
+      if (list.length === 0) {
+        container.innerHTML = '<span class="text-xs text-gray-500 italic">Bấm "Lấy danh sách bạn bè TikTok" để tải bạn bè của tài khoản này vào đây.</span>';
+        return;
+      }
+
+      container.innerHTML = list.map(name => {
+        const isSelected = currentSelected.includes(name);
+        const bg = isSelected ? 'bg-rose-600 text-white border-rose-500 shadow-md font-semibold' : 'bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700';
+        const icon = isSelected ? '✓ ' : '+ ';
+        return `<button type="button" onclick="toggleFriendChip('${escapeHtml(name)}')" class="px-2.5 py-1 text-xs rounded-lg border transition flex items-center gap-1 ${bg}">
+          <span>${icon}${escapeHtml(name)}</span>
+        </button>`;
+      }).join('');
+    }
+
+    async function toggleFriendChip(name) {
+      const input = document.getElementById('inputTargetFriends');
+      let current = input.value.split(',').map(s => s.trim()).filter(Boolean);
+      if (current.includes(name)) {
+        current = current.filter(x => x !== name);
+      } else {
+        current.push(name);
+      }
+      input.value = current.join(', ');
+      renderFriendsChips();
+      await saveSettings();
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text;
+      return div.innerHTML;
+    }
+
+    // Initialize
+    loadData();
+    fetchLogs();
+    setInterval(fetchLogs, 2500);
+    setInterval(loadData, 10000);
+  </script>
+</body>
+</html>

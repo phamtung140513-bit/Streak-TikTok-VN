@@ -1,0 +1,145 @@
+{% set current_nav %}{% block nav_key %}dashboard{% endblock %}{% endset %}
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>{% block title %}续火花{% endblock %}</title>
+    <link rel="stylesheet" href="/static/app.css?v=20260824">
+  </head>
+  <body data-page="{% block page_key %}dashboard{% endblock %}">
+    <header class="mobile-topbar">
+      <button class="icon-button" type="button" data-nav-toggle aria-label="打开导航" title="打开导航">
+        <i data-lucide="menu"></i>
+      </button>
+      <a class="mobile-brand" href="/">
+        <span class="brand-mark"><i data-lucide="flame"></i></span>
+        <span>续火花</span>
+      </a>
+      <button class="icon-button" type="button" data-theme-toggle aria-label="切换主题" title="切换主题">
+        <i data-lucide="sun" class="theme-light-icon"></i>
+        <i data-lucide="moon" class="theme-dark-icon"></i>
+      </button>
+    </header>
+
+    <div class="sidebar-backdrop" data-nav-close></div>
+    <div class="app-shell">
+      <aside class="sidebar" id="app-sidebar" aria-label="主导航">
+        <div class="sidebar-head">
+          <a class="brand" href="/">
+            <span class="brand-mark"><i data-lucide="flame"></i></span>
+            <span>
+              <strong class="brand-title">续火花</strong>
+              <small class="brand-subtitle">多账号控制平台</small>
+            </span>
+          </a>
+          <button class="icon-button sidebar-close" type="button" data-nav-close aria-label="关闭导航" title="关闭导航">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+
+        <nav class="nav-groups">
+          <section>
+            <p class="nav-group-title">工作台</p>
+            <div class="nav-group">
+              <a class="nav-item {% if current_nav|trim == 'dashboard' %}active{% endif %}" href="/">
+                <i data-lucide="layout-dashboard"></i><span>首页总览</span>
+              </a>
+              <a class="nav-item {% if current_nav|trim == 'send_console' %}active{% endif %}" href="/ops/send-console">
+                <i data-lucide="send"></i><span>发送控制台</span>
+              </a>
+              {% if is_admin %}
+              <a class="nav-item {% if current_nav|trim == 'logs' %}active{% endif %}" href="/ops/logs">
+                <i data-lucide="scroll-text"></i><span>发送记录</span>
+              </a>
+              {% endif %}
+            </div>
+          </section>
+
+          <section>
+            <p class="nav-group-title">管理</p>
+            <div class="nav-group">
+              <a class="nav-item" href="/#account-management">
+                <i data-lucide="users"></i><span>账号管理</span>
+              </a>
+              <a class="nav-item" href="/#interactive-login-section">
+                <i data-lucide="scan-line"></i><span>登录抖音账号</span>
+              </a>
+{% if is_admin %}
+              <a class="nav-item" href="/#config-panel">
+                <i data-lucide="sliders-horizontal"></i><span>运行配置</span>
+              </a>
+              {% endif %}
+{% if is_admin %}
+              <a class="nav-item" href="/#ops-panel">
+                <i data-lucide="wrench"></i><span>运维操作</span>
+              </a>
+              {% endif %}
+{% if is_admin %}
+              <a class="nav-item" href="/#settings-panel">
+                <i data-lucide="settings"></i><span>系统设置</span>
+              </a>
+              {% endif %}
+            </div>
+          </section>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-summary">
+            <span class="user-avatar">{{ (current_user or "A")[:1] }}</span>
+            <span class="user-copy">
+              <strong>{{ current_user or "未登录" }}</strong>
+              <small>{% if is_admin %}管理员{% else %}普通用户{% endif %}</small>
+            </span>
+          </div>
+          <form method="post" action="/logout">
+            <button class="button button-quiet button-block" type="submit">
+              <i data-lucide="log-out"></i><span>退出登录</span>
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="page-header">
+          <div class="page-heading">
+            <h1>{% block page_title %}续火花{% endblock %}</h1>
+            <p>{% block page_subtitle %}多账号发送控制平台{% endblock %}</p>
+          </div>
+          <div class="page-header-actions">
+            <button class="icon-button desktop-theme-toggle" type="button" data-theme-toggle aria-label="切换主题" title="切换主题">
+              <i data-lucide="sun" class="theme-light-icon"></i>
+              <i data-lucide="moon" class="theme-dark-icon"></i>
+            </button>
+            <div class="action-bar">
+              {% block topbar_actions %}{% endblock %}
+            </div>
+          </div>
+        </header>
+
+        {% if flash %}
+        <div class="flash flash-{{ flash.level }}" role="status">{{ flash.message }}</div>
+        {% endif %}
+
+        <div class="page-body">
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+    </div>
+
+    <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+      <div class="confirm-icon"><i data-lucide="triangle-alert"></i></div>
+      <h2 id="confirm-title">确认操作</h2>
+      <p id="confirm-message">请确认是否继续。</p>
+      <div class="confirm-actions">
+        <button class="button button-quiet" type="button" data-confirm-cancel>取消</button>
+        <button class="button button-danger" type="button" data-confirm-accept>确认执行</button>
+      </div>
+    </dialog>
+
+    <script defer src="/static/lucide.min.js?v=20260710"></script>
+    <script defer src="/static/app.js?v=20260824"></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

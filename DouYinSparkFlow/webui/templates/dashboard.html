@@ -1,0 +1,615 @@
+{% extends "base.html" %}
+
+{% block nav_key %}dashboard{% endblock %}
+{% block page_key %}dashboard{% endblock %}
+{% block title %}续火花控制台{% endblock %}
+{% block page_title %}今日续火花{% endblock %}
+{% block page_subtitle %}确认进度、异常目标与下一次自动触发{% endblock %}
+
+{% block topbar_actions %}
+{% set top_summary = ops.send_console.summary %}
+<a class="button button-quiet" href="/ops/send-console">
+  <i data-lucide="send"></i><span>发送控制台</span>
+</a>
+<form
+  method="post"
+  action="/ops/run-failed"
+  data-confirm-title="补发异常目标"
+  data-confirm="将补发 {{ top_summary.today_attention_targets }} 个待核验、失败或受账号异常影响的目标。确认继续吗？"
+  data-confirm-accept="开始补发"
+  data-confirm-tone="primary"
+>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button
+    class="button button-soft"
+    type="submit"
+    data-action-count-source="attention"
+    {% if ops.task_lock.running or top_summary.today_attention_targets == 0 %}disabled{% endif %}
+  >
+    <i data-lucide="refresh-cw"></i>
+    <span>补发异常 <b data-action-count>{{ top_summary.today_attention_targets }}</b></span>
+  </button>
+</form>
+<form
+  method="post"
+  action="/ops/run-now"
+  data-confirm-title="补发全部对象"
+  data-confirm="这会向 {{ top_summary.total_targets }} 个目标再次发送消息，包括今天已经强确认成功的目标。确认继续吗？"
+  data-confirm-accept="确认全部重发"
+>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button
+    class="button button-danger"
+    type="submit"
+    data-disable-while-running
+    {% if ops.task_lock.running or top_summary.total_targets == 0 %}disabled{% endif %}
+  >
+    <i data-lucide="rotate-ccw"></i><span>全部重发</span>
+  </button>
+</form>
+{% endblock %}
+
+{% block content %}
+{% set summary = ops.send_console.summary %}
+{% set total = summary.total_targets or 0 %}
+{% set confirmed = summary.today_confirmed_targets or 0 %}
+{% set progress_pct = (confirmed / total * 100)|round(0)|int if total else 0 %}
+
+<div class="dashboard-stack" data-overview-root>
+  <div
+    class="status-banner {% if ops.task_lock.running %}warning{% elif ops.task_lock.stale %}info{% else %}success{% endif %}"
+    data-task-banner
+  >
+    <strong>
+      <i data-lucide="{% if ops.task_lock.running %}loader-circle{% elif ops.task_lock.stale %}info{% else %}circle-check{% endif %}"></i>
+      <span data-task-text>
+        {% if ops.task_lock.running %}
+        发送任务运行中，已运行约 {{ ops.task_lock.ageSeconds }} 秒
+        {% elif ops.task_lock.stale %}
+        检测到过期任务锁，下次启动任务时会自动清理
+        {% else %}
+        当前没有发送任务运行
+        {% endif %}
+      </span>
+    </strong>
+    <span class="pill info" data-overview-live-state>实时</span>
+  </div>
+
+  <div class="status-banner info refresh-notice" data-refresh-notice>
+    <strong><i data-lucide="circle-check"></i><span>任务已结束，详细发送记录可以刷新查看。</span></strong>
+    <button class="button button-quiet" type="button" data-refresh-page>
+      <i data-lucide="refresh-cw"></i><span>刷新详情</span>
+    </button>
+  </div>
+
+  <section class="overview-strip" aria-label="今日发送概览">
+    <div class="overview-primary">
+      <span class="progress-badge">
+        <strong data-overview-value="progressPercent">{{ progress_pct }}%</strong>
+        <small>强确认</small>
+      </span>
+      <div>
+        <div class="overview-label">今日确认进度</div>
+        <div class="overview-value" data-overview-value="progress">{{ confirmed }}/{{ total }}</div>
+        <div class="overview-help">
+          {{ summary.enabled_accounts }} 个启用账号，共 {{ total }} 个目标
+        </div>
+      </div>
+    </div>
+    <div class="overview-cell">
+      <div class="overview-label">下次自动触发</div>
+      <div class="overview-value" data-overview-value="nextTriggerAt">
+        {{ ops.schedule.nextTriggerDisplay or "-" }}
+      </div>
+      <div class="overview-help" data-overview-value="scheduleLabel">{{ ops.schedule.label or "-" }}</div>
+    </div>
+    <div class="overview-cell">
+      <div class="overview-label">最近强确认</div>
+      <div class="overview-value" data-overview-value="lastConfirmedAt">
+        {{ summary.last_confirmed_display or "-" }}
+      </div>
+      <div class="overview-help">以服务端回执或页面回显为准</div>
+    </div>
+    <div class="overview-cell">
+      <div class="overview-label">需要处理</div>
+      <div class="overview-value" data-overview-value="attention">{{ summary.today_attention_targets }}</div>
+      <div class="overview-help">待核验、失败和账号阻断</div>
+    </div>
+  </section>
+
+  <section class="metric-grid" aria-label="今日状态分布">
+    <article class="metric-card success">
+      <div class="metric-label">确认成功</div>
+      <div class="metric-value" data-overview-value="confirmed">{{ confirmed }}</div>
+      <div class="metric-help">强证据确认</div>
+    </article>
+    <article class="metric-card warning">
+      <div class="metric-label">待核验</div>
+      <div class="metric-value">{{ summary.today_unconfirmed_targets }}</div>
+      <div class="metric-help">会进入异常补发</div>
+    </article>
+    <article class="metric-card danger">
+      <div class="metric-label">失败或阻断</div>
+      <div class="metric-value">
+        {{ summary.today_failed_targets + summary.today_account_blocked_targets }}
+      </div>
+      <div class="metric-help">可针对性重试</div>
+    </article>
+    <article class="metric-card info">
+      <div class="metric-label">待发送</div>
+      <div class="metric-value" data-overview-value="pending">
+        {{ summary.today_pending_targets + summary.today_unprocessed_targets }}
+      </div>
+      <div class="metric-help">等待窗口或尚未处理</div>
+    </article>
+  </section>
+
+  <section class="dashboard-section">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">账号状态</h2>
+        <p class="muted compact">异常账号排在前面，点击发送控制台查看目标级明细。</p>
+      </div>
+      <a class="section-link" href="/ops/send-console">查看全部发送明细</a>
+    </div>
+    <div class="account-summary-list">
+      {% for row in ops.send_console.accounts %}
+      {% set row_total = row.total_targets or 0 %}
+      {% set row_confirmed = row.confirmed_targets|length %}
+      {% set row_pct = (row_confirmed / row_total * 100)|round(0)|int if row_total else 0 %}
+      <a
+        class="account-row"
+        href="/ops/send-console#account-{{ row.unique_id }}"
+        data-account-overview="{{ row.unique_id }}"
+        data-account-state="{{ row.state }}"
+      >
+        <div class="account-ident">
+          <span class="account-avatar">{{ (row.username or "A")[:1] }}</span>
+          <span class="account-name">
+            <strong>{{ row.username }}</strong>
+            <small>
+              {% if row.state == "paused" %}账号已暂停
+              {% elif row.state == "attention" %}存在异常目标
+              {% elif row.state == "warning" %}存在数据警告
+              {% elif row.state == "pending" %}等待发送
+              {% else %}今日状态正常{% endif %}
+            </small>
+          </span>
+        </div>
+        <div class="progress-line">
+          <span class="progress-track"><i style="width:{{ row_pct }}%" data-account-progress></i></span>
+          <span class="progress-text" data-account-progress-text>{{ row_confirmed }}/{{ row_total }}</span>
+        </div>
+        <span class="summary-value"><strong data-account-confirmed>{{ row_confirmed }}</strong><small>已确认</small></span>
+        <span class="summary-value"><strong data-account-attention>{{ row.attention_count }}</strong><small>需处理</small></span>
+        <span class="summary-value"><strong data-account-pending>{{ row.pending_count }}</strong><small>待发送</small></span>
+        <i data-lucide="chevron-right"></i>
+      </a>
+      {% else %}
+      <div class="empty-state">当前没有启用账号。</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <details class="collapsible-section" id="interactive-login-section">
+    <summary>
+      <span class="summary-copy">
+        <i data-lucide="scan-line"></i>
+        <span><strong>交互式登录浏览器</strong><small>扫码登录、登录态失效修复与账号同步</small></span>
+      </span>
+      <span class="pill" id="login-desktop-runtime-state">待检查</span>
+      <i class="summary-chevron" data-lucide="chevron-down"></i>
+    </summary>
+    <div class="collapsible-body">
+      <div
+        class="login-workspace-grid"
+        id="login-desktop-controls"
+        data-public-url="{{ login_desktop_public_url }}"
+        data-display-mode="{{ login_desktop_display_mode }}"
+        data-csrf-token="{{ csrf_token }}"
+      >
+        <div class="login-actions">
+          <div class="login-status-panel">
+            <strong>登录状态</strong>
+            <p class="muted compact" id="login-desktop-status-text">展开后检查登录桌面状态。手机端可直接查看下方的大图二维码。</p>
+          </div>
+          <div class="login-qr-panel">
+            <strong>手机扫码登录</strong>
+            <img class="login-qr-image" data-login-qr alt="抖音登录二维码" hidden>
+            <p class="muted compact" data-login-qr-status>点击“打开登录工作区”后会在这里显示大图二维码。</p>
+            <div class="button-row">
+              <button class="button button-soft" type="button" data-refresh-login-qr>
+                <i data-lucide="refresh-cw"></i><span>刷新二维码</span>
+              </button>
+              <a class="button button-quiet" href="/login-desktop/qr" target="_blank" rel="noopener">
+                <i data-lucide="maximize-2"></i><span>单独打开二维码</span>
+              </a>
+            </div>
+          </div>
+          <div class="button-row">
+            <button class="button button-primary login-desktop-open" type="button" data-login-mode="add">
+              <i data-lucide="user-plus"></i><span>添加新的抖音账号</span>
+            </button>
+            <button class="button button-soft login-desktop-save" type="button" data-relogin-unique-id="" data-login-mode="add">
+              <i data-lucide="save"></i><span>保存新账号登录</span>
+            </button>
+            <button
+              class="button button-danger login-desktop-close"
+              type="button"
+              data-confirm-title="关闭登录界面"
+              data-confirm="当前未保存的登录过程会被关闭，登录界面会恢复初始状态。确认继续吗？"
+              data-confirm-accept="确认关闭"
+            >
+              <i data-lucide="x-circle"></i><span>关闭登录界面</span>
+            </button>
+            {% if is_admin %}
+            <button
+              class="button button-danger login-desktop-reset"
+              type="button"
+              data-confirm-title="强制重置登录工作区"
+              data-confirm="会清理当前登录环境并切换队列中的下一位用户。确认继续吗？"
+              data-confirm-accept="确认重置"
+            >
+              <i data-lucide="rotate-ccw"></i><span>强制重置工作区</span>
+            </button>
+            {% endif %}
+            <p class="muted compact login-workspace-hint">已有抖音账号请从对应账号卡片点击“重新登录”；“添加新的抖音账号”会将新账号自动绑定到当前用户。</p>
+            <button class="button button-quiet" type="button" data-copy-login-url>
+              <i data-lucide="copy"></i><span>复制地址</span>
+            </button>
+          </div>
+        </div>
+        <div class="desktop-frame-wrap">
+          <div class="native-login-panel" data-native-login hidden>
+            <i data-lucide="monitor-up"></i>
+            <strong>Windows 本地登录浏览器已启动</strong>
+            <p class="muted compact">请在本机弹出的 Chromium 窗口中完成抖音扫码。扫码完成后回到这里点击“保存新账号登录”。</p>
+            <button class="button button-primary" type="button" data-focus-native-browser>
+              <i data-lucide="focus"></i><span>显示登录浏览器</span>
+            </button>
+          </div>
+          <iframe
+            class="desktop-frame"
+            data-login-frame
+            data-src="{{ login_desktop_public_url }}"
+            title="交互式登录浏览器"
+          ></iframe>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  {% if is_admin %}
+  <section class="dashboard-section" id="user-management">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">用户管理</h2>
+        <p class="muted compact">创建普通用户并分配可管理的抖音账号。管理员始终可以查看全部账号。</p>
+      </div>
+      <span class="pill">{{ web_users|length }} 个普通用户</span>
+    </div>
+    <details class="collapsible-section" open>
+      <summary><span class="summary-copy"><i data-lucide="user-plus"></i><span><strong>创建用户</strong><small>账号绑定可后续调整</small></span></span><i class="summary-chevron" data-lucide="chevron-down"></i></summary>
+      <div class="collapsible-body">
+        <form method="post" action="/admin/users/create" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="form-grid">
+            <label><span>用户名</span><input type="text" name="username" pattern="[A-Za-z0-9_.-]+" required></label>
+            <label><span>初始密码</span><input type="password" name="password" autocomplete="new-password" required></label>
+          </div>
+          <label class="check-row"><input type="checkbox" name="enabled" checked><span>允许登录</span></label>
+          <fieldset class="stack-form account-assignment-picker">
+            <legend>分配账号</legend>
+            <p class="muted compact">可多选；如果暂时不分配账号，保持全部未选即可。</p>
+            {% for account in all_accounts %}
+            <label class="check-row">
+              <input type="checkbox" name="account_refs" value="{{ account.account_ref }}">
+              <span>{{ account.username }}（{{ account.unique_id }}）</span>
+            </label>
+            {% else %}
+            <p class="muted compact">当前没有可分配的抖音账号。</p>
+            {% endfor %}
+          </fieldset>
+          <button class="button button-primary" type="submit"><i data-lucide="user-plus"></i><span>创建普通用户</span></button>
+        </form>
+      </div>
+    </details>
+    {% for web_user in web_users %}
+    <details class="collapsible-section">
+      <summary><span class="summary-copy"><span class="account-avatar">{{ (web_user.username or "U")[:1] }}</span><span><strong>{{ web_user.username }}</strong><small>{{ web_user.account_refs|length }} 个绑定账号</small></span></span><span class="status-chip {% if web_user.enabled %}success{% else %}warning{% endif %}">{% if web_user.enabled %}可登录{% else %}已停用{% endif %}</span><i class="summary-chevron" data-lucide="chevron-down"></i></summary>
+      <div class="collapsible-body">
+        <form method="post" action="/admin/users/{{ web_user.username }}/update" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="form-grid">
+            <label><span>用户名</span><input type="text" name="new_username" value="{{ web_user.username }}" pattern="[A-Za-z0-9_.-]+" required></label>
+            <label><span>重置密码（留空不修改）</span><input type="password" name="password" autocomplete="new-password"></label>
+          </div>
+          <label class="check-row"><input type="checkbox" name="enabled" {% if web_user.enabled %}checked{% endif %}><span>允许登录</span></label>
+          <fieldset class="stack-form account-assignment-picker">
+            <legend>绑定账号</legend>
+            <p class="muted compact">可多选；全部未选表示解除该用户的所有抖音账号绑定。</p>
+            {% for account in all_accounts %}
+            <label class="check-row">
+              <input type="checkbox" name="account_refs" value="{{ account.account_ref }}" {% if account.account_ref in web_user.account_refs %}checked{% endif %}>
+              <span>{{ account.username }}（{{ account.unique_id }}）</span>
+            </label>
+            {% else %}
+            <p class="muted compact">当前没有可分配的抖音账号。</p>
+            {% endfor %}
+          </fieldset>
+          <div class="form-actions"><button class="button button-primary" type="submit"><i data-lucide="save"></i><span>保存用户</span></button></div>
+        </form>
+        <form method="post" action="/admin/users/{{ web_user.username }}/delete" data-confirm-title="删除 Web 用户" data-confirm="只删除 Web 用户并解除账号绑定，不删除抖音账号数据。确认继续吗？" data-confirm-accept="确认删除">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="button button-danger" type="submit"><i data-lucide="trash-2"></i><span>删除用户</span></button>
+        </form>
+      </div>
+    </details>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="dashboard-section" id="account-management">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">账号管理</h2>
+        <p class="muted compact">管理开关、目标好友、好友缓存和登录态。</p>
+      </div>
+      <span class="pill">{{ accounts|length }} 个账号</span>
+    </div>
+    <div class="account-management-list">
+      {% for account in accounts %}
+      <details class="collapsible-section">
+        <summary>
+          <span class="summary-copy">
+            <span class="account-avatar">{{ (account.username or "A")[:1] }}</span>
+            <span>
+              <strong>{{ account.username }}</strong>
+              <small>{{ account.targets|length }} 个目标 · {{ account.friends_cache|default([], true)|length }} 个缓存好友</small>
+            </span>
+          </span>
+          <span class="status-chip {% if account.enabled|default(true) %}success{% else %}warning{% endif %}">
+            {% if account.enabled|default(true) %}已启用{% else %}已停用{% endif %}
+          </span>
+          <i class="summary-chevron" data-lucide="chevron-down"></i>
+        </summary>
+        <div class="collapsible-body">
+          <form method="post" action="/accounts/{{ account.unique_id }}/update" class="stack-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-grid">
+              <label>
+                <span>显示名</span>
+                <input type="text" name="username" value="{{ account.username }}">
+              </label>
+              <label class="check-row">
+                <input type="checkbox" name="enabled" {% if account.enabled|default(true) %}checked{% endif %}>
+                <span>启用自动续火花</span>
+              </label>
+            </div>
+            <label>
+              <span>目标好友，每行一个</span>
+              <textarea class="targets-textarea" name="targets" rows="5">{{ account.targets|default([], true)|join('\n') }}</textarea>
+            </label>
+            <div
+              class="friend-picker"
+              data-account-id="{{ account.unique_id }}"
+              data-refresh-url="/accounts/{{ account.unique_id }}/friends/refresh"
+              data-csrf-token="{{ csrf_token }}"
+            >
+              <div class="friend-picker-toolbar">
+                <div>
+                  <strong>好友选择器</strong>
+                  <p class="muted compact friend-picker-status">
+                    {% if account.friends_cache_updated_at %}上次刷新：{{ account.friends_cache_updated_at }}{% else %}尚未读取好友列表{% endif %}
+                  </p>
+                </div>
+                <button class="button button-quiet friend-refresh-button" type="button">
+                  <i data-lucide="refresh-cw"></i><span>刷新好友</span>
+                </button>
+              </div>
+              <label>
+                <span>搜索好友</span>
+                <input class="friend-search-input" type="search" placeholder="输入昵称筛选">
+              </label>
+              <p class="muted compact friend-picker-summary">已选 0 人</p>
+              <div class="friend-picker-list"></div>
+              <script type="application/json" id="friends-cache-{{ account.unique_id }}">{{ account.friends_cache|default([], true)|tojson }}</script>
+              <script type="application/json" id="selected-targets-{{ account.unique_id }}">{{ account.targets|default([], true)|tojson }}</script>
+            </div>
+            <div class="form-actions">
+              <button class="button button-primary" type="submit">
+                <i data-lucide="save"></i><span>保存账号</span>
+              </button>
+              <button
+                class="button button-quiet login-desktop-open"
+                type="button"
+                data-relogin-unique-id="{{ account.unique_id }}"
+                data-account-name="{{ account.username }}"
+              >
+                <i data-lucide="scan-line"></i><span>重新登录</span>
+              </button>
+              <button
+                class="button button-soft login-desktop-save"
+                type="button"
+                data-relogin-unique-id="{{ account.unique_id }}"
+                data-account-name="{{ account.username }}"
+              >
+                <i data-lucide="save"></i><span>保存登录态</span>
+              </button>
+            </div>
+          </form>
+          <div class="button-row section-actions">
+            <form method="post" action="/accounts/{{ account.unique_id }}/toggle-enabled">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="button button-quiet" type="submit">
+                <i data-lucide="{% if account.enabled|default(true) %}pause{% else %}play{% endif %}"></i>
+                <span>{% if account.enabled|default(true) %}停用自动发送{% else %}启用自动发送{% endif %}</span>
+              </button>
+            </form>
+            {% if is_admin %}
+            <form
+              method="post"
+              action="/accounts/{{ account.unique_id }}/delete"
+              data-confirm-title="删除账号"
+              data-confirm="将删除账号“{{ account.username }}”及其目标、发送账本和失败记录。此操作无法撤销。"
+              data-confirm-accept="确认删除"
+            >
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="button button-danger" type="submit">
+                <i data-lucide="trash-2"></i><span>删除账号</span>
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      </details>
+      {% else %}
+      <div class="empty-state">当前没有账号，请先使用交互式登录浏览器添加。</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="advanced-grid">
+    {% if is_admin %}
+    <details class="collapsible-section" id="config-panel">
+      <summary>
+        <span class="summary-copy">
+          <i data-lucide="sliders-horizontal"></i>
+          <span><strong>运行配置</strong><small>消息变体和发送间隔</small></span>
+        </span>
+        <i class="summary-chevron" data-lucide="chevron-down"></i>
+      </summary>
+      <div class="collapsible-body">
+        <form method="post" action="/config" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label><span>固定消息模板</span><input type="text" name="messageTemplate" value="{{ runtime_config.messageTemplate }}"></label>
+          <label><span>消息变体，每行一个</span><textarea name="messageVariants" rows="7">{{ runtime_config.sendStrategy.messageVariants|join('\n') }}</textarea></label>
+          <div class="form-grid">
+            <label><span>消息最小间隔（秒）</span><input type="number" name="messageIntervalSecondsMin" min="0" value="{{ runtime_config.sendStrategy.messageIntervalSecondsMin }}"></label>
+            <label><span>消息最大间隔（秒）</span><input type="number" name="messageIntervalSecondsMax" min="0" value="{{ runtime_config.sendStrategy.messageIntervalSecondsMax }}"></label>
+          </div>
+          <label>
+            <span>目标顺序</span>
+            <select name="shuffleTargets">
+              <option value="on" {% if runtime_config.sendStrategy.shuffleTargets %}selected{% endif %}>随机打乱</option>
+              <option value="" {% if not runtime_config.sendStrategy.shuffleTargets %}selected{% endif %}>保持配置顺序</option>
+            </select>
+          </label>
+          <button class="button button-primary" type="submit"><i data-lucide="save"></i><span>保存运行配置</span></button>
+        </form>
+      </div>
+    </details>
+
+    <details class="collapsible-section" id="ops-panel">
+      <summary>
+        <span class="summary-copy">
+          <i data-lucide="wrench"></i>
+          <span><strong>运维操作</strong><small>调度、代理和日志</small></span>
+        </span>
+        <i class="summary-chevron" data-lucide="chevron-down"></i>
+      </summary>
+      <div class="collapsible-body">
+        <div class="button-grid">
+          <form
+            method="post"
+            action="/ops/run-failed"
+            data-confirm-title="补发异常目标"
+            data-confirm="将补发 {{ summary.today_attention_targets }} 个异常目标。确认继续吗？"
+            data-confirm-accept="开始补发"
+            data-confirm-tone="primary"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="button button-soft" type="submit" data-action-count-source="attention" {% if ops.task_lock.running or summary.today_attention_targets == 0 %}disabled{% endif %}>
+              <i data-lucide="refresh-cw"></i><span>补发异常</span>
+            </button>
+          </form>
+          <form
+            method="post"
+            action="/ops/run-now"
+            data-confirm-title="补发全部对象"
+            data-confirm="将向全部 {{ total }} 个目标再次发送消息。确认继续吗？"
+            data-confirm-accept="确认全部重发"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="button button-danger" type="submit" data-disable-while-running {% if ops.task_lock.running or total == 0 %}disabled{% endif %}>
+              <i data-lucide="rotate-ccw"></i><span>全部重发</span>
+            </button>
+          </form>
+          <form method="post" action="/ops/proxy/refresh">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="button button-quiet" type="submit"><i data-lucide="cloud-download"></i><span>刷新代理订阅</span></button>
+          </form>
+          <form
+            method="post"
+            action="/ops/proxy/restart"
+            data-confirm-title="重启代理容器"
+            data-confirm="重启期间发送任务和登录浏览器可能短暂断网。确认继续吗？"
+            data-confirm-accept="确认重启"
+          >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="button button-danger" type="submit"><i data-lucide="power"></i><span>重启代理</span></button>
+          </form>
+          <a class="button button-quiet" href="/ops/logs"><i data-lucide="scroll-text"></i><span>查看详细日志</span></a>
+        </div>
+        <form method="post" action="/ops/schedule" class="stack-form section-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label>
+            <span>自动发送窗口，例如 10:00-18:00/20m</span>
+            <input type="text" name="daily_schedule" value="{{ ops.daily_schedule }}">
+          </label>
+          <button class="button button-quiet" type="submit"><i data-lucide="calendar-clock"></i><span>更新发送窗口</span></button>
+        </form>
+      </div>
+    </details>
+
+    <details class="collapsible-section" id="settings-panel">
+      <summary>
+        <span class="summary-copy">
+          <i data-lucide="settings"></i>
+          <span><strong>系统设置</strong><small>路径、登录 API 与管理员密码</small></span>
+        </span>
+        <i class="summary-chevron" data-lucide="chevron-down"></i>
+      </summary>
+      <div class="collapsible-body">
+        <form method="post" action="/settings" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="form-grid">
+            <label><span>Compose 根目录</span><input type="text" name="compose_root" value="{{ app_settings.compose_root }}"></label>
+            <label><span>任务日志文件</span><input type="text" name="ops_log_file" value="{{ app_settings.ops_log_file }}"></label>
+            <label><span>代理刷新脚本</span><input type="text" name="proxy_refresh_script" value="{{ app_settings.proxy_refresh_script }}"></label>
+            <label><span>登录桌面 API</span><input type="text" name="login_desktop_api_url" value="{{ app_settings.login_desktop_api_url }}"></label>
+            <label><span>抖音业务网络出口</span><select name="douyin_network_mode"><option value="direct" {% if app_settings.douyin_network_mode|default("direct") == "direct" %}selected{% endif %}>直连（默认）</option><option value="mihomo" {% if app_settings.douyin_network_mode == "mihomo" %}selected{% endif %}>Mihomo（高级）</option></select></label>
+            <label><span>Mihomo 代理地址</span><input type="text" name="douyin_proxy_url" value="{{ app_settings.douyin_proxy_url|default("http://proxy:7890") }}" placeholder="http://proxy:7890"><small>仅在选择 Mihomo 时使用；默认不启用。</small></label>
+            <label><span>Web UI 端口</span><input type="number" min="1" max="65535" name="ui_port" value="{{ app_settings.ui_port }}"></label>
+          </div>
+          <div class="form-grid">
+            <label><span>修改管理员密码</span><input type="password" name="new_password" autocomplete="new-password" placeholder="留空表示不修改"></label>
+            <label><span>确认新密码</span><input type="password" name="confirm_password" autocomplete="new-password" placeholder="再次输入新密码"></label>
+          </div>
+          <button class="button button-primary" type="submit"><i data-lucide="save"></i><span>保存系统设置</span></button>
+        </form>
+      </div>
+    </details>
+    {% endif %}
+
+    {% if not is_admin %}
+    <details class="collapsible-section" id="password-panel">
+      <summary>
+        <span class="summary-copy"><i data-lucide="key-round"></i><span><strong>修改登录密码</strong><small>修改当前 Web 用户密码</small></span></span>
+        <i class="summary-chevron" data-lucide="chevron-down"></i>
+      </summary>
+      <div class="collapsible-body">
+        <form method="post" action="/account/password" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="form-grid">
+            <label><span>新密码</span><input type="password" name="new_password" autocomplete="new-password" required></label>
+            <label><span>确认新密码</span><input type="password" name="confirm_password" autocomplete="new-password" required></label>
+          </div>
+          <button class="button button-primary" type="submit"><i data-lucide="save"></i><span>保存密码</span></button>
+        </form>
+      </div>
+    </details>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

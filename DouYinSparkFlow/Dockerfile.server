@@ -1,0 +1,63 @@
+ARG PLAYWRIGHT_BASE_IMAGE=mcr.microsoft.com/playwright/python:v1.56.0-jammy
+ARG NODE_RUNTIME_IMAGE=node:22-bookworm-slim
+FROM ${NODE_RUNTIME_IMAGE} AS node-runtime
+FROM ${PLAYWRIGHT_BASE_IMAGE}
+
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+
+WORKDIR /app
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG ALL_PROXY
+ARG http_proxy
+ARG https_proxy
+ARG all_proxy
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV ALL_PROXY=${ALL_PROXY}
+ENV http_proxy=${http_proxy}
+ENV https_proxy=${https_proxy}
+ENV all_proxy=${all_proxy}
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+ENV PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST}
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
+    && sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
+    && ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && echo ${TZ} > /etc/timezone \
+    && apt-get update && apt-get install -y \
+      cron \
+      curl \
+      docker.io \
+      fluxbox \
+      fonts-wqy-zenhei \
+      fonts-noto-cjk \
+      novnc \
+      websockify \
+      x11vnc \
+      xfonts-intl-chinese \
+    && docker --version \
+    && node --version \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build proxies must never leak into the runtime container. Compose injects
+# service-addressable runtime proxies explicitly.
+ENV HTTP_PROXY= \
+    HTTPS_PROXY= \
+    ALL_PROXY= \
+    http_proxy= \
+    https_proxy= \
+    all_proxy=
+
+COPY . .
+
+CMD ["python", "main.py", "--doTask"]

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.vscode/
+chrome/
+logs/
+.DS_Store
+usersData.json
+webui_settings.json
+config.json
+
+webui_users.json
+.migration-backups/
