@@ -31,9 +31,8 @@ window.chrome = { runtime: {} };
 
 
 def get_browser_channel():
-    edge_path = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
-    if edge_path.exists():
-        return "msedge"
+    # Sử dụng Chromium tích hợp của Playwright để cách ly tuyệt đối,
+    # tránh hoàn toàn xung đột khóa tiến trình (exitCode=21) do Microsoft Edge trên Windows.
     return None
 
 
@@ -45,6 +44,32 @@ def get_profile_dir(acc_id="acc_1"):
         p_dir = REPO_ROOT / "state" / "tiktok_profile"
     p_dir.mkdir(parents=True, exist_ok=True)
     return p_dir
+
+
+def cleanup_profile_locks(target_dir: Path):
+    """Đóng các tiến trình mồ côi và xóa sạch các file khóa hồ sơ trình duyệt."""
+    try:
+        import psutil
+        p_str = str(target_dir).lower()
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = proc.info.get('cmdline') or []
+                cmd_str = " ".join(cmdline).lower()
+                p_name = proc.info.get('name', '').lower()
+                if p_str in cmd_str and any(b in p_name for b in ['chrome', 'edge', 'chromium', 'msedge']):
+                    proc.kill()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    for fname in ["SingletonLock", "SingletonSocket", "SingletonCookie", "LOCK", "lockfile"]:
+        try:
+            (target_dir / fname).unlink(missing_ok=True)
+            (target_dir / "Default" / fname).unlink(missing_ok=True)
+        except Exception:
+            pass
+
 
 
 def check_session_in_cookies_db(cookies_path: Path) -> bool:
@@ -181,6 +206,7 @@ async def import_tiktok_cookie(acc_id: str, raw_input: str):
         return {"status": "error", "message": "Không tìm thấy sessionid hợp lệ trong chuỗi bạn nhập."}
 
     p_dir = get_profile_dir(acc_id)
+    cleanup_profile_locks(p_dir)
     playwright = None
     context = None
     try:
@@ -275,6 +301,7 @@ async def get_tiktok_friends(acc_id="acc_1"):
     logger.info(f"Đang quét danh sách bạn bè từ TikTok cho [{acc_name}]...")
     
     p_dir = get_profile_dir(acc_id)
+    cleanup_profile_locks(p_dir)
     playwright = None
     context = None
     friends = []
@@ -477,6 +504,7 @@ async def send_tiktok_messages(target_acc_id=None, custom_message=None):
             acc_id = acc.get("id", f"acc_{i+1}")
             acc_name = acc.get("name", acc_id)
             p_dir = get_profile_dir(acc_id)
+            cleanup_profile_locks(p_dir)
 
             logger.info(f"Khởi động trình duyệt cho: [{acc_name}] (Profile: {p_dir.name})...")
             chan = get_browser_channel()
@@ -595,9 +623,9 @@ async def start_qr_login(acc_id="acc_1"):
     async def _qr_runner():
         global _active_qr_context, _active_qr_playwright
         p_dir = get_profile_dir(acc_id)
+        cleanup_profile_locks(p_dir)
         try:
             _active_qr_playwright = await async_playwright().start()
-            chan = get_browser_channel()
             launch_args = {
                 "user_data_dir": str(p_dir),
                 "headless": True,
@@ -614,10 +642,15 @@ async def start_qr_login(acc_id="acc_1"):
                 ],
                 "locale": "vi-VN"
             }
-            if chan:
-                launch_args["channel"] = chan
 
-            _active_qr_context = await _active_qr_playwright.chromium.launch_persistent_context(**launch_args)
+            try:
+                _active_qr_context = await _active_qr_playwright.chromium.launch_persistent_context(**launch_args)
+            except Exception as e_launch:
+                logger.warning(f"Lần 1 mở context bị lỗi ({e_launch}), dọn dẹp khóa và thử lại...")
+                cleanup_profile_locks(p_dir)
+                await asyncio.sleep(0.5)
+                _active_qr_context = await _active_qr_playwright.chromium.launch_persistent_context(**launch_args)
+
             await _active_qr_context.add_init_script(STEALTH_SCRIPT)
             page = _active_qr_context.pages[0] if _active_qr_context.pages else await _active_qr_context.new_page()
 
@@ -640,7 +673,7 @@ async def start_qr_login(acc_id="acc_1"):
             await page.goto("https://www.tiktok.com/login/qrcode", wait_until="domcontentloaded", timeout=45000)
 
             # Dự phòng nếu chưa bắt được từ response API thì tìm canvas chụp ảnh
-            for _ in range(12):
+            for _ in range(15):
                 if not qr_login_state["is_active"]:
                     return
                 if qr_login_state.get("qr_base64"):
@@ -684,7 +717,8 @@ async def start_qr_login(acc_id="acc_1"):
         except Exception as err:
             logger.error(f"Lỗi phiên QR [{acc_name}]: {err}")
             qr_login_state["status"] = "error"
-            qr_login_state["message"] = f"Lỗi: {err}"
+            clean_err = str(err).split("\n")[0]
+            qr_login_state["message"] = f"Lỗi khởi tạo: {clean_err}. Vui lòng bấm 'Tải lại mã QR'."
         finally:
             qr_login_state["is_active"] = False
             if _active_qr_context:
