@@ -600,13 +600,14 @@ async def start_qr_login(acc_id="acc_1"):
             chan = get_browser_channel()
             launch_args = {
                 "user_data_dir": str(p_dir),
-                "headless": False,
-                "viewport": {"width": 1000, "height": 800},
+                "headless": True,
+                "viewport": {"width": 1280, "height": 800},
                 "user_agent": REAL_USER_AGENT,
                 "args": [
                     "--disable-blink-features=AutomationControlled",
-                    "--window-position=-3000,-3000",
-                    "--window-size=1000,800",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-background-timer-throttling",
+                    "--disable-renderer-backgrounding",
                     "--no-sandbox",
                     "--no-first-run",
                     "--no-default-browser-check"
@@ -620,39 +621,49 @@ async def start_qr_login(acc_id="acc_1"):
             await _active_qr_context.add_init_script(STEALTH_SCRIPT)
             page = _active_qr_context.pages[0] if _active_qr_context.pages else await _active_qr_context.new_page()
 
+            # Bắt trực tiếp mã QR base64 từ phản hồi API của TikTok
+            async def on_response(res):
+                if not qr_login_state.get("qr_base64") and "get_qrcode" in res.url:
+                    try:
+                        d = await res.json()
+                        b64 = d.get("data", {}).get("qrcode")
+                        if b64:
+                            qr_login_state["qr_base64"] = f"data:image/png;base64,{b64}"
+                            qr_login_state["status"] = "waiting_scan"
+                            qr_login_state["message"] = f"Đã có mã QR! Mở TikTok trên điện thoại quét mã để đăng nhập [{acc_name}]."
+                            logger.info(f"Đã tạo thành công mã QR trực tiếp trên Web cho [{acc_name}].")
+                    except Exception:
+                        pass
+
+            page.on("response", on_response)
+
             await page.goto("https://www.tiktok.com/login/qrcode", wait_until="domcontentloaded", timeout=45000)
-            
-            # Chờ phần tử canvas QR code
-            canvas = None
-            for _ in range(25):
+
+            # Dự phòng nếu chưa bắt được từ response API thì tìm canvas chụp ảnh
+            for _ in range(12):
                 if not qr_login_state["is_active"]:
                     return
-                c = page.locator("canvas")
-                if await c.count() > 0:
-                    canvas = c.first
+                if qr_login_state.get("qr_base64"):
                     break
+                canvas = page.locator("canvas")
+                if await canvas.count() > 0:
+                    try:
+                        img_bytes = await canvas.first.screenshot()
+                        b64_str = base64.b64encode(img_bytes).decode("utf-8")
+                        qr_login_state["qr_base64"] = f"data:image/png;base64,{b64_str}"
+                        qr_login_state["status"] = "waiting_scan"
+                        qr_login_state["message"] = f"Đã có mã QR! Mở TikTok trên điện thoại quét mã để đăng nhập [{acc_name}]."
+                        logger.info(f"Đã chụp ảnh mã QR canvas cho [{acc_name}].")
+                        break
+                    except Exception:
+                        pass
                 await asyncio.sleep(0.5)
 
-            if not canvas:
-                # Nếu không tìm thấy canvas, thử chụp vùng container QR
-                qr_cont = page.locator('div[class*="qrcode" i], div[data-e2e="qrcode"]')
-                if await qr_cont.count() > 0:
-                    canvas = qr_cont.first
+            if not qr_login_state.get("qr_base64"):
+                raise RuntimeError("Không tìm thấy mã QR trên trang TikTok. Vui lòng bấm thử lại.")
 
-            if not canvas:
-                raise RuntimeError("Không tìm thấy mã QR trên trang TikTok. Vui lòng thử lại.")
-
-            # Chụp ảnh mã QR và mã hóa base64
-            await asyncio.sleep(1)
-            img_bytes = await canvas.screenshot()
-            b64_str = base64.b64encode(img_bytes).decode("utf-8")
-            qr_login_state["qr_base64"] = f"data:image/png;base64,{b64_str}"
-            qr_login_state["status"] = "waiting_scan"
-            qr_login_state["message"] = f"Đã có mã QR! Mở TikTok trên điện thoại quét mã để đăng nhập [{acc_name}]."
-            logger.info(f"Đã tạo thành công mã QR cho [{acc_name}]. Đang chờ quét mã...")
-
-            # Vòng lặp chờ người dùng quét mã trên điện thoại (tối đa 3 phút)
-            for _ in range(180):
+            # Vòng lặp tự động phát hiện khi người dùng quét và bấm xác nhận trên điện thoại (4 phút)
+            for _ in range(240):
                 if not qr_login_state["is_active"]:
                     return
                 try:
@@ -694,7 +705,7 @@ async def start_qr_login(acc_id="acc_1"):
 
 
 async def confirm_qr_login():
-    """Người dùng bấm nút 'Đã quét QR' trên giao diện để chốt phiên và lưu."""
+    """Người dùng bấm nút 'Đã quét QR' trên giao diện để kiểm tra và chốt lưu phiên."""
     global _active_qr_context, _active_qr_playwright
     acc_name = qr_login_state.get("acc_name", "Tài khoản")
     acc_id = qr_login_state.get("acc_id", "acc_1")
@@ -703,9 +714,13 @@ async def confirm_qr_login():
     has_session = False
     if _active_qr_context:
         try:
-            pages = _active_qr_context.pages
-            if pages:
-                p = pages[0]
+            # 1. Kiểm tra cookie hiện tại
+            cookies = await _active_qr_context.cookies()
+            has_session = any(c.get("name") in ["sessionid", "sessionid_ss", "sid_guard", "uid_tt"] for c in cookies)
+
+            # 2. Nếu chưa thấy, thử mở trang messages để TikTok đồng bộ cookie
+            if not has_session and _active_qr_context.pages:
+                p = _active_qr_context.pages[0]
                 await p.goto("https://www.tiktok.com/messages", wait_until="domcontentloaded", timeout=15000)
                 await asyncio.sleep(2)
                 cur_url = p.url.lower()
@@ -714,40 +729,39 @@ async def confirm_qr_login():
         except Exception as e:
             logger.warning(f"Kiểm tra phiên sau quét mã: {e}")
 
+    # Kiểm tra trong file db SQLite
+    if not has_session:
+        p_dir = get_profile_dir(acc_id)
+        c_path = p_dir / "Default" / "Network" / "Cookies"
+        if c_path.exists() and check_session_in_cookies_db(c_path):
+            has_session = True
+
     if has_session:
         qr_login_state["status"] = "success"
         qr_login_state["message"] = f"✅ Đã lưu phiên đăng nhập [{acc_name}] thành công!"
         qr_login_state["is_active"] = False
-        res = {"status": "ok", "message": f"🎉 Đã lưu phiên đăng nhập [{acc_name}] thành công!"}
+
+        if _active_qr_context:
+            try:
+                await _active_qr_context.close()
+            except Exception:
+                pass
+            _active_qr_context = None
+
+        if _active_qr_playwright:
+            try:
+                await _active_qr_playwright.stop()
+            except Exception:
+                pass
+            _active_qr_playwright = None
+
+        return {"status": "ok", "message": f"🎉 Đã lưu phiên đăng nhập [{acc_name}] thành công!"}
     else:
-        # Kiểm tra thêm trong db nếu đã lưu trước đó
-        p_dir = get_profile_dir(acc_id)
-        c_path = p_dir / "Default" / "Network" / "Cookies"
-        if c_path.exists() and check_session_in_cookies_db(c_path):
-            qr_login_state["status"] = "success"
-            qr_login_state["message"] = f"✅ Đã lưu phiên đăng nhập [{acc_name}] thành công!"
-            qr_login_state["is_active"] = False
-            res = {"status": "ok", "message": f"🎉 Đã lưu phiên đăng nhập [{acc_name}] thành công!"}
-        else:
-            qr_login_state["status"] = "error"
-            qr_login_state["message"] = f"⚠️ TikTok chưa ghi nhận phiên đăng nhập của [{acc_name}]. Vui lòng bấm 'Mở Cửa Sổ Đăng Nhập' hoặc 'Nhập Cookie'!"
-            res = {"status": "error", "message": "TikTok chưa ghi nhận đăng nhập. Vui lòng bấm 'Mở Cửa Sổ Đăng Nhập' hoặc 'Nhập Cookie' để đăng nhập chuẩn 100%!"}
-
-    if _active_qr_context:
-        try:
-            await _active_qr_context.close()
-        except Exception:
-            pass
-        _active_qr_context = None
-
-    if _active_qr_playwright:
-        try:
-            await _active_qr_playwright.stop()
-        except Exception:
-            pass
-        _active_qr_playwright = None
-
-    return res
+        # Giữ nguyên context để người dùng có thể quét hoặc bấm xác nhận lại trên điện thoại
+        return {
+            "status": "waiting",
+            "message": "Chưa thấy tín hiệu đăng nhập từ điện thoại. Bạn hãy chắc chắn đã bấm 'Đăng nhập' trên ứng dụng TikTok rồi bấm lại nút này nhé!"
+        }
 
 
 
