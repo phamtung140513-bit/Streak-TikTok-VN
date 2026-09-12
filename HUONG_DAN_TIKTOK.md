@@ -35,9 +35,19 @@ Hệ thống tự động gửi tin nhắn giữ chuỗi ngọn lửa (Streak) t
 
 ---
 
+## 2. Quản lý 2 tài khoản độc lập
+- Ứng dụng hỗ trợ đồng thời **Acc 1** và **Acc 2**.
+- Mỗi tài khoản có:
+  - File đăng nhập riêng biệt (`state/tiktok_profile` & `state/tiktok_profile_acc2`).
+  - Danh sách bạn bè riêng, quét và chọn bạn bè riêng bằng chip UI.
+  - Phím tắt đăng nhập tiện lợi ngay ngoài Desktop: `DANG_NHAP_TIKTOK.bat` và `DANG_NHAP_ACC_2.bat`.
+  - Phím tắt chạy bot ngoài Desktop: `CHAY_BOT_TIKTOK.bat`.
+
+---
+
 ## 3. Hoạt động hàng ngày lúc 5h sáng
 
-- Bộ lập lịch (`Scheduler`) đã được tích hợp chạy ngầm trong ứng dụng.
-- Đúng **05:00 sáng**, bot sẽ tự động thực hiện gửi tin nhắn đến các bạn bè đã cấu hình và ghi log kết quả.
-- Lần chạy tiếp theo sẽ được hiển thị và cập nhật liên tục trên Web Dashboard.
+- Bộ lập lịch (`Scheduler`) chạy ngầm trong ứng dụng.
+- Đúng **05:00 sáng**, bot sẽ tự động gửi tin nhắn cho **Acc 1**, sau đó nghỉ 10 giây và tiếp tục gửi cho **Acc 2**.
+- Kết quả được lưu vào `logs/tiktok_bot.log` và hiển thị trên Web Dashboard.
 
