@@ -1,42 +1,29 @@
-# 🔥 DouYin SparkFlow
+# 🔥 Streak-TikTok-VN (Giữ Chuỗi TikTok Việt Nam)
 
 <div align="center">
 
-**抖音多账号火花自动维护系统**
+**Hệ thống tự động gửi tin nhắn giữ chuỗi ngọn lửa TikTok (Quản lý 2 Tài Khoản) - Web UI Dashboard**
 
-一个智能化的抖音好友互动管理工具，自动维护好友火花标记，支持多账号管理、定时发送、Web 控制台
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-[![GitHub stars](https://img.shields.io/github/stars/halfwaystudent/douyin-sparkflow?style=social)](https://github.com/halfwaystudent/douyin-sparkflow)
-[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
-[![LINUX DO](https://img.shields.io/badge/LINUX%20DO-Discussion-blue)](https://linux.do)
+[Tính Năng](#-tính-năng-nổi-bật) • [Khởi Động Nhanh](#-hướng-dẫn-khởi-động-nhanh) • [Giao Diện Web](#-giao-diện-quản-trị)
 
-[功能特性](#-功能特性) • [快速开始](#-快速开始) • [使用文档](#-使用文档) • [部署指南](#-部署指南) • [社区讨论](https://linux.do)
+<br/>
+
+<img src="docs/images/preview_webui.png" alt="Giao diện Web Giữ Chuỗi TikTok VN" width="880"/>
+
+<p><i>Giao diện quản trị Web UI trực quan - Quản lý đồng thời 2 tài khoản TikTok giữ chuỗi ngọn lửa lúc 05:00 sáng</i></p>
 
 </div>
 
 ---
 
-> ⚠️ **重要提示**
->
-> 本项目是非官方的第三方公开源码项目，与抖音及其关联方不存在隶属、授权、赞助、代理或合作关系。
-> 本项目自有代码采用 [PolyForm Noncommercial License 1.0.0](LICENSE)，仅授权非商业用途；未经版权持有人事先书面授权，不得将本项目用于收费服务、商业运营、商业账号管理、营销推广、客户代运营、商业产品集成或其他商业用途。
-> 使用者只能操作本人拥有或已获得明确授权的账号，并须自行遵守抖音用户协议、相关法律法规及账号管理要求。自动化操作可能导致验证、限流、功能限制、账号封禁、登录态失效、数据丢失或其他后果。
-
-## 📸 主界面预览
-
-### 🌙 暗色模式
+## 📸 Giao Diện Quản Trị Thực Tế
 
 <div align="center">
-  <img src="DouYinSparkFlow/docs/images/screenshot-dark.png" alt="主界面预览 - 暗色模式" width="800"/>
-  <p><i>Web 管理控制台 - 仪表盘视图（暗色主题）</i></p>
-</div>
-
-### ☀️ 亮色模式
-
-<div align="center">
-  <img src="DouYinSparkFlow/docs/images/screenshot-light.png" alt="主界面预览 - 亮色模式" width="800"/>
-  <p><i>Web 管理控制台 - 仪表盘视图（亮色主题）</i></p>
+  <img src="docs/images/preview_webui.png" alt="Giao diện Web Giữ Chuỗi TikTok VN" width="880"/>
+  <p><i>Bảng điều khiển Web UI Quản Lý 2 Tài Khoản (Dark Mode)</i></p>
 </div>
 
 ---
