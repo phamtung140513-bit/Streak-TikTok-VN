@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import os
 import random
 from datetime import datetime
@@ -373,3 +374,144 @@ async def send_tiktok_messages(target_acc_id=None, custom_message=None):
                 await playwright.stop()
             except Exception:
                 pass
+
+
+# ==========================================
+# QUẢN LÝ ĐĂNG NHẬP MÃ QR TRỰC TIẾP TRÊN WEB
+# ==========================================
+qr_login_state = {
+    "is_active": False,
+    "acc_id": None,
+    "acc_name": "",
+    "qr_base64": None,
+    "status": "idle",
+    "message": ""
+}
+
+_active_qr_context = None
+_active_qr_playwright = None
+
+
+async def cancel_qr_login():
+    """Hủy phiên quét mã QR hiện tại."""
+    global _active_qr_context, _active_qr_playwright
+    qr_login_state["is_active"] = False
+    qr_login_state["status"] = "cancelled"
+    qr_login_state["message"] = "Đã hủy phiên đăng nhập."
+    qr_login_state["qr_base64"] = None
+    if _active_qr_context:
+        try:
+            await _active_qr_context.close()
+        except Exception:
+            pass
+        _active_qr_context = None
+    if _active_qr_playwright:
+        try:
+            await _active_qr_playwright.stop()
+        except Exception:
+            pass
+        _active_qr_playwright = None
+
+
+async def start_qr_login(acc_id="acc_1"):
+    """Khởi tạo phiên lấy mã QR TikTok trực tiếp trên Web."""
+    global _active_qr_context, _active_qr_playwright
+
+    # Nếu đang có phiên khác thì hủy trước
+    await cancel_qr_login()
+
+    acc_name = "Tài khoản 2" if acc_id == "acc_2" else "Tài khoản 1"
+    qr_login_state["is_active"] = True
+    qr_login_state["acc_id"] = acc_id
+    qr_login_state["acc_name"] = acc_name
+    qr_login_state["status"] = "loading"
+    qr_login_state["message"] = f"Đang kết nối TikTok và tải mã QR cho [{acc_name}]..."
+    qr_login_state["qr_base64"] = None
+
+    logger.info(f"Bắt đầu khởi tạo phiên quét mã QR Web cho [{acc_name}]...")
+
+    async def _qr_runner():
+        global _active_qr_context, _active_qr_playwright
+        p_dir = get_profile_dir(acc_id)
+        try:
+            _active_qr_playwright = await async_playwright().start()
+            chan = get_browser_channel()
+            launch_args = {
+                "user_data_dir": str(p_dir),
+                "headless": True,
+                "viewport": {"width": 1280, "height": 800},
+                "args": ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+                "locale": "vi-VN"
+            }
+            if chan:
+                launch_args["channel"] = chan
+
+            _active_qr_context = await _active_qr_playwright.chromium.launch_persistent_context(**launch_args)
+            page = _active_qr_context.pages[0] if _active_qr_context.pages else await _active_qr_context.new_page()
+
+            await page.goto("https://www.tiktok.com/login/qrcode", wait_until="domcontentloaded", timeout=45000)
+            
+            # Chờ phần tử canvas QR code
+            canvas = None
+            for _ in range(25):
+                if not qr_login_state["is_active"]:
+                    return
+                c = page.locator("canvas")
+                if await c.count() > 0:
+                    canvas = c.first
+                    break
+                await asyncio.sleep(0.5)
+
+            if not canvas:
+                # Nếu không tìm thấy canvas, thử chụp vùng container QR
+                qr_cont = page.locator('div[class*="qrcode" i], div[data-e2e="qrcode"]')
+                if await qr_cont.count() > 0:
+                    canvas = qr_cont.first
+
+            if not canvas:
+                raise RuntimeError("Không tìm thấy mã QR trên trang TikTok. Vui lòng thử lại.")
+
+            # Chụp ảnh mã QR và mã hóa base64
+            await asyncio.sleep(1)
+            img_bytes = await canvas.screenshot()
+            b64_str = base64.b64encode(img_bytes).decode("utf-8")
+            qr_login_state["qr_base64"] = f"data:image/png;base64,{b64_str}"
+            qr_login_state["status"] = "waiting_scan"
+            qr_login_state["message"] = f"Đã có mã QR! Mở TikTok trên điện thoại quét mã để đăng nhập [{acc_name}]."
+            logger.info(f"Đã tạo thành công mã QR cho [{acc_name}]. Đang chờ quét mã...")
+
+            # Vòng lặp chờ người dùng quét mã trên điện thoại (tối đa 3 phút)
+            for _ in range(180):
+                if not qr_login_state["is_active"]:
+                    return
+                cur_url = page.url.lower()
+                if "tiktok.com" in cur_url and "login" not in cur_url and "about:blank" not in cur_url:
+                    logger.info(f"🎉 Phát hiện đăng nhập thành công cho [{acc_name}]!")
+                    qr_login_state["status"] = "success"
+                    qr_login_state["message"] = f"✅ Đã đăng nhập và lưu phiên [{acc_name}] thành công!"
+                    await asyncio.sleep(2.5)
+                    break
+                await asyncio.sleep(1)
+
+        except Exception as err:
+            logger.error(f"Lỗi phiên QR [{acc_name}]: {err}")
+            qr_login_state["status"] = "error"
+            qr_login_state["message"] = f"Lỗi: {err}"
+        finally:
+            qr_login_state["is_active"] = False
+            if _active_qr_context:
+                try:
+                    await _active_qr_context.close()
+                except Exception:
+                    pass
+                _active_qr_context = None
+            if _active_qr_playwright:
+                try:
+                    await _active_qr_playwright.stop()
+                except Exception:
+                    pass
+                _active_qr_playwright = None
+
+    asyncio.create_task(_qr_runner())
+    return {"status": "ok", "message": f"Đang khởi tạo mã QR cho [{acc_name}]..."}
+

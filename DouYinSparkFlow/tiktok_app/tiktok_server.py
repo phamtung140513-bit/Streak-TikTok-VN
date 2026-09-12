@@ -23,6 +23,9 @@ from tiktok_app.tiktok_bot import (
     get_tiktok_friends,
     open_login_window,
     send_tiktok_messages,
+    start_qr_login,
+    cancel_qr_login,
+    qr_login_state,
 )
 from tiktok_app.tiktok_scheduler import run_scheduler_loop, scheduler_state
 
@@ -67,6 +70,23 @@ async def get_status():
 async def api_open_login(acc_id: str = "acc_1"):
     res = await open_login_window(acc_id)
     return JSONResponse(res)
+
+
+@app.post("/api/login/qr/start")
+async def api_start_qr_login(acc_id: str = "acc_1"):
+    res = await start_qr_login(acc_id)
+    return JSONResponse(res)
+
+
+@app.get("/api/login/qr/status")
+async def api_get_qr_status():
+    return JSONResponse(qr_login_state)
+
+
+@app.post("/api/login/qr/cancel")
+async def api_cancel_qr_login():
+    await cancel_qr_login()
+    return JSONResponse({"status": "ok", "message": "Đã hủy phiên quét mã QR."})
 
 
 @app.post("/api/test-send")
